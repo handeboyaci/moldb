@@ -1,0 +1,10 @@
+
+[format]
+indent-style = "space"
+quote-style = "double"
+
+[lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.format]
+indent_width = 2

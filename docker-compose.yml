@@ -1,0 +1,28 @@
+
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: mcs07/postgres-rdkit
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=chemstructdb
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7.2
+    ports:
+      - "6379:6379"
