@@ -12,3 +12,6 @@ class MoleculeService:
 
   def find_similar_molecules(self, smiles: str, min_similarity: float = 0.7):
     return self.repository.find_similar(smiles, min_similarity)
+
+  def substructure_search(self, smiles: str):
+    return self.repository.substructure_search(smiles)

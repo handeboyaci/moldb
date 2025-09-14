@@ -40,3 +40,7 @@ class MoleculeRepository:
       output.append(molecule)
 
     return output
+
+  def substructure_search(self, smiles: str):
+    query_mol = func.mol_from_smiles(smiles)
+    return self.db.query(Molecule).filter(Molecule.mol.op("@>")(query_mol)).all()

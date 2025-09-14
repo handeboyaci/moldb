@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from razi.rdkit_postgresql.types import Bfp
+from razi.rdkit_postgresql.types import Bfp, Mol
 from sqlalchemy import REAL, Column, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base
@@ -14,6 +14,7 @@ class Molecule(Base):
   inchi = Column(String, unique=True, nullable=False)
   inchikey = Column(String(27), unique=True, nullable=False)
   smiles = Column(String, nullable=False)
+  mol = Column(Mol, nullable=True)
   molecular_weight = Column(REAL, nullable=False)
   chemical_formula = Column(String(255), nullable=False)
   logp = Column(REAL, nullable=False)

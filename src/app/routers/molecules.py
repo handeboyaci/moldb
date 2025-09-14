@@ -13,6 +13,10 @@ class SimilaritySearchRequest(BaseModel):
   min_similarity: float = 0.7
 
 
+class SubstructureSearchRequest(BaseModel):
+  smiles: str
+
+
 @router.get("/search")
 def search_molecules(
   min_mol_weight: float = None,
@@ -27,3 +31,9 @@ def search_molecules(
 def find_similar_molecules(request: SimilaritySearchRequest, db: Session = Depends(dependencies.get_db)):
   service = MoleculeService(db)
   return service.find_similar_molecules(request.smiles, request.min_similarity)
+
+
+@router.post("/search/substructure")
+def substructure_search(request: SubstructureSearchRequest, db: Session = Depends(dependencies.get_db)):
+  service = MoleculeService(db)
+  return service.substructure_search(request.smiles)
