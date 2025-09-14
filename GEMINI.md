@@ -1,0 +1,2 @@
+- Tests are run with `docker compose exec app pytest`
+- `ruff format` and `ruff check --fix` should be run locally before story completion.

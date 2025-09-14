@@ -1,3 +1,5 @@
+line-length = 120
+indent-width = 2
 
 [format]
 indent-style = "space"
@@ -6,5 +8,5 @@ quote-style = "double"
 [lint]
 select = ["E", "F", "W", "I"]
 
-[tool.ruff.format]
-indent_width = 2
+[lint.per-file-ignores]
+"alembic/env.py" = ["E402"]
