@@ -1,93 +1,45 @@
-import os
-import sys
-
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
-
-from src.app.dependencies import get_db
-from src.app.main import app
-from src.app.models.molecule import Base
-
-SQLALCHEMY_DATABASE_URL = "postgresql://user:password@db:5432/chemstructdb_test"
-
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-@pytest.fixture(scope="function")
-def test_db():
-  engine = create_engine(SQLALCHEMY_DATABASE_URL)
-  with engine.connect() as connection:
-    connection.execute(text("CREATE EXTENSION IF NOT EXISTS rdkit"))
-    connection.execute(
-      text(
-        """
-            CREATE OR REPLACE FUNCTION update_molecule_data()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                NEW.mol = mol_from_smiles(NEW.smiles::cstring);
-                NEW.morgan_fingerprint = morganbv_fp(NEW.mol);
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-            """
-      )
-    )
-    connection.commit()
-
-  Base.metadata.create_all(bind=engine)
-  with engine.connect() as connection:
-    connection.execute(
-      text(
-        """
-            CREATE TRIGGER update_molecule_data_trigger
-            BEFORE INSERT OR UPDATE ON molecules
-            FOR EACH ROW EXECUTE FUNCTION update_molecule_data();
-            """
-      )
-    )
-    connection.commit()
-
-  db = TestingSessionLocal()
-  try:
-    yield db
-  finally:
-    db.close()
-    Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture(scope="function")
-def client(test_db):
-  def override_get_db():
-    yield test_db
-
-  app.dependency_overrides[get_db] = override_get_db
-  with TestClient(app) as c:
-    yield c
-  del app.dependency_overrides[get_db]
+from rq.job import Job
+from src.app.dependencies import redis_conn
 
 
 def test_create_molecule_success(client):
-  response = client.post("/api/v1/molecules", json={"smiles": "CCO"})
-  assert response.status_code == 200
+  response = client.post("/api/v1/molecule", json={"smiles": "CCO"})
+  assert response.status_code == 202
   data = response.json()
-  assert "id" in data
-  assert isinstance(data["id"], str)
+  assert data["status"] == "finished"
+  job = Job.fetch(data["job_id"], connection=redis_conn)
+  result = job.return_value()
+  assert result.smiles == "CCO"
+  assert result.id is not None
 
 
 def test_create_molecule_invalid_smiles(client):
-  response = client.post("/api/v1/molecules", json={"smiles": "invalid-smiles"})
-  assert response.status_code == 422  # Unprocessable Entity for validation errors
+  response = client.post("/api/v1/molecule", json={"smiles": "invalid-smiles"})
+  assert response.status_code == 202
   data = response.json()
-  assert "detail" in data
+  assert data["status"] == "failed"
+  job = Job.fetch(data["job_id"], connection=redis_conn)
+  assert isinstance(job.latest_result().exc_string, str)
+  assert "Invalid SMILES string" in job.latest_result().exc_string
+
+
+def test_create_molecule_duplicate_inchi(client):
+  # First creation should succeed
+  response1 = client.post("/api/v1/molecule", json={"smiles": "CCO"})
+  assert response1.status_code == 202
+  assert response1.json()["status"] == "finished"
+
+  # Second creation should fail
+  response2 = client.post("/api/v1/molecule", json={"smiles": "CCO"})
+  assert response2.status_code == 202
+  data = response2.json()
+  assert data["status"] == "failed"
+  job = Job.fetch(data["job_id"], connection=redis_conn)
+  assert "IntegrityError" in job.latest_result().exc_string
 
 
 def test_create_molecule_missing_smiles(client):
-  response = client.post("/api/v1/molecules", json={})
+  response = client.post("/api/v1/molecule", json={})
   assert response.status_code == 422  # Unprocessable Entity for validation errors
   data = response.json()
   assert "detail" in data

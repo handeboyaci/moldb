@@ -1,6 +1,9 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        BUILD_ENV: dev
     ports:
       - "8000:8000"
     depends_on:
@@ -8,6 +11,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    volumes:
+      - .:/app
 
   db:
     image: mcs07/postgres-rdkit
@@ -16,8 +21,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=chemstructdb
-    ports:
-      - "5432:5432"
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user -d chemstructdb"]
       interval: 5s
@@ -26,5 +30,16 @@ services:
 
   redis:
     image: redis:7.2
-    ports:
-      - "6379:6379"
+
+  worker:
+    build:
+      context: .
+      args:
+        BUILD_ENV: dev
+    entrypoint: ["rq", "worker", "-u", "redis://redis:6379"]
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - .:/app
+

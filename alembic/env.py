@@ -1,6 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool, text
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -75,10 +75,6 @@ def run_migrations_online() -> None:
   )
 
   with connectable.connect() as connection:
-    # Execute CREATE EXTENSION before configuring context and running migrations
-    connection.execute(text("CREATE EXTENSION IF NOT EXISTS rdkit"))
-    connection.commit()
-
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():

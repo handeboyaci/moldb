@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, Descriptors, MolFromSmiles, MolToInchi, MolToInchiKey
+from rdkit.Chem import Descriptors, MolFromSmiles, MolToInchi, MolToInchiKey, rdMolDescriptors
 from sqlalchemy.orm import Session
 
 from ..models.molecule import MoleculeInDB
@@ -29,7 +29,7 @@ class MoleculeService:
     h_bond_donors = Descriptors.NumHDonors(mol)
     h_bond_acceptors = Descriptors.NumHAcceptors(mol)
     rotatable_bonds = Descriptors.NumRotatableBonds(mol)
-    morgan_fingerprint = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+    morgan_fingerprint = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
     print("Molecular properties and fingerprint calculated.")
 
     molecule_data = MoleculeInDB(
@@ -70,22 +70,22 @@ class MoleculeService:
     chemical_formula: str | None = None,
   ):
     return self.repository.search(
-      min_mol_weight,
-      max_mol_weight,
-      min_logp,
-      max_logp,
-      min_tpsa,
-      max_tpsa,
-      min_h_bond_donors,
-      max_h_bond_donors,
-      min_h_bond_acceptors,
-      max_h_bond_acceptors,
-      min_rotatable_bonds,
-      max_rotatable_bonds,
-      inchi,
-      inchikey,
-      smiles,
-      chemical_formula,
+      min_mol_weight=min_mol_weight,
+      max_mol_weight=max_mol_weight,
+      min_logp=min_logp,
+      max_logp=max_logp,
+      min_tpsa=min_tpsa,
+      max_tpsa=max_tpsa,
+      min_h_bond_donors=min_h_bond_donors,
+      max_h_bond_donors=max_h_bond_donors,
+      min_h_bond_acceptors=min_h_bond_acceptors,
+      max_h_bond_acceptors=max_h_bond_acceptors,
+      min_rotatable_bonds=min_rotatable_bonds,
+      max_rotatable_bonds=max_rotatable_bonds,
+      inchi=inchi,
+      inchikey=inchikey,
+      smiles=smiles,
+      chemical_formula=chemical_formula,
     )
 
   def find_similar_molecules(self, smiles: str, min_similarity: float = 0.7):

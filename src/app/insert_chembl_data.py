@@ -68,7 +68,6 @@ def insert_data_via_api():
     smiles_idx = header.index("canonical_smiles")
 
     for line in f:
-
       parts = line.strip().split("\t")
       if len(parts) != len(header):
         print(f"Skipping malformed line: {line.strip()}")

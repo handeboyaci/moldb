@@ -1,2 +1,3 @@
 - Tests are run with `docker compose exec app pytest`
 - `ruff format` and `ruff check --fix` should be run locally before story completion.
+- Dependencies are now managed with `requirements.txt` (production), `requirements-dev.txt` (development tools like ruff, pytest, httpx), and `requirements-test.txt` (testing-specific dependencies). These are installed via the `Dockerfile` using a `BUILD_ENV` argument in `docker-compose.yml`.

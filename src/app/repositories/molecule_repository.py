@@ -1,10 +1,10 @@
 from uuid import UUID
 
 from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem
+from rdkit.Chem import rdMolDescriptors
 from sqlalchemy.orm import Session
 
-from ..models.molecule import Molecule, MoleculeInDB
+from ..models.molecule import Molecule, MoleculeInDB, MoleculeOut
 
 
 class MoleculeRepository:
@@ -16,7 +16,7 @@ class MoleculeRepository:
     self.db.add(db_molecule)
     self.db.commit()
     self.db.refresh(db_molecule)
-    return db_molecule
+    return MoleculeOut.model_validate(db_molecule)
 
   def search(
     self,
@@ -79,17 +79,20 @@ class MoleculeRepository:
     query_mol = Chem.MolFromSmiles(smiles)
     if query_mol is None:
       return []
-    query_fp = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, nBits=2048)
+    query_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(query_mol, 2, nBits=2048)
 
     similar_molecules = []
     all_molecules = self.db.query(Molecule).all()
 
     for mol_in_db in all_molecules:
       if mol_in_db.mol is not None:
-        db_fp = AllChem.GetMorganFingerprintAsBitVect(mol_in_db.mol, 2, nBits=2048)
+        db_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol_in_db.mol, 2, nBits=2048)
         similarity = DataStructs.TanimotoSimilarity(query_fp, db_fp)
         if similarity >= min_similarity:
+          mol_in_db.similarity_score = similarity
           similar_molecules.append(mol_in_db)
+
+    similar_molecules.sort(key=lambda x: x.similarity_score, reverse=True)
     return similar_molecules
 
   def substructure_search(self, smiles: str):

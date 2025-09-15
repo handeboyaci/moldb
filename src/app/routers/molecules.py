@@ -1,11 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from src.app.decorators import asynchronous_task
+from src.worker.tasks import (
+  create_molecule_task,
+  find_similar_molecules_task,
+  search_molecules_task,
+  substructure_search_task,
+)
+
 from .. import dependencies
-from ..models.molecule import MoleculeCreate, MoleculeOut
-from ..services.molecule_service import MoleculeService
+from ..models.molecule import MoleculeCreate, MoleculeOut, MoleculeWithSimilarity
 
 router = APIRouter()
 
@@ -20,16 +26,15 @@ class SubstructureSearchRequest(BaseModel):
 
 
 @router.post("/molecule", response_model=MoleculeOut)
+@asynchronous_task
 def create_molecule(request: MoleculeCreate, db: Session = Depends(dependencies.get_db)):
-  print("HERE")
-  service = MoleculeService(db)
-  try:
-    return service.create_molecule(request.smiles)
-  except IntegrityError:
-    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Molecule with this InChI already exists.")
+  # The actual logic is now in create_molecule_task
+  # The decorator will enqueue this task.
+  return create_molecule_task, request.smiles
 
 
 @router.get("/search", response_model=list[MoleculeOut])
+@asynchronous_task
 def search_molecules(
   min_mol_weight: float | None = None,
   max_mol_weight: float | None = None,
@@ -49,34 +54,34 @@ def search_molecules(
   chemical_formula: str | None = None,
   db: Session = Depends(dependencies.get_db),
 ):
-  service = MoleculeService(db)
-  return service.search_molecules(
-    min_mol_weight,
-    max_mol_weight,
-    min_logp,
-    max_logp,
-    min_tpsa,
-    max_tpsa,
-    min_h_bond_donors,
-    max_h_bond_donors,
-    min_h_bond_acceptors,
-    max_h_bond_acceptors,
-    min_rotatable_bonds,
-    max_rotatable_bonds,
-    inchi,
-    inchikey,
-    smiles,
-    chemical_formula,
-  )
+  search_params = {
+    "min_mol_weight": min_mol_weight,
+    "max_mol_weight": max_mol_weight,
+    "min_logp": min_logp,
+    "max_logp": max_logp,
+    "min_tpsa": min_tpsa,
+    "max_tpsa": max_tpsa,
+    "min_h_bond_donors": min_h_bond_donors,
+    "max_h_bond_donors": max_h_bond_donors,
+    "min_h_bond_acceptors": min_h_bond_acceptors,
+    "max_h_bond_acceptors": max_h_bond_acceptors,
+    "min_rotatable_bonds": min_rotatable_bonds,
+    "max_rotatable_bonds": max_rotatable_bonds,
+    "inchi": inchi,
+    "inchikey": inchikey,
+    "smiles": smiles,
+    "chemical_formula": chemical_formula,
+  }
+  return search_molecules_task, search_params
 
 
-@router.post("/search/similar", response_model=list[MoleculeOut])
+@router.post("/search/similar", response_model=list[MoleculeWithSimilarity])
+@asynchronous_task
 def find_similar_molecules(request: SimilaritySearchRequest, db: Session = Depends(dependencies.get_db)):
-  service = MoleculeService(db)
-  return service.find_similar_molecules(request.smiles, request.min_similarity)
+  return find_similar_molecules_task, request.smiles, request.min_similarity
 
 
 @router.post("/search/substructure", response_model=list[MoleculeOut])
+@asynchronous_task
 def substructure_search(request: SubstructureSearchRequest, db: Session = Depends(dependencies.get_db)):
-  service = MoleculeService(db)
-  return service.substructure_search(request.smiles)
+  return substructure_search_task, request.smiles

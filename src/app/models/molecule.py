@@ -64,3 +64,7 @@ class MoleculeOut(BaseModel):
   rotatable_bonds: int
 
   model_config = ConfigDict(from_attributes=True)
+
+
+class MoleculeWithSimilarity(MoleculeOut):
+  similarity_score: float
