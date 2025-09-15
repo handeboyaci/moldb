@@ -3,12 +3,6 @@ services:
     build: .
     ports:
       - "8000:8000"
-    volumes:
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./tests:/app/tests
-      - ./insert_data.py:/app/insert_data.py
-      - ./create_tables.py:/app/create_tables.py
     depends_on:
       db:
         condition: service_healthy

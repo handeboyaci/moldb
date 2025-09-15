@@ -1,7 +1,10 @@
-fastapi
-uvicorn
-psycopg2-binary
 alembic
-pytest
-httpx
+fastapi
+psycopg2-binary
+pydantic
 pydantic-settings
+pytest
+rdkit
+requests
+sqlalchemy
+uvicorn
