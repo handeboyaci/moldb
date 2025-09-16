@@ -28,6 +28,14 @@ class MoleculeRepository:
     self.db.refresh(db_molecule)
     return MoleculeOut.model_validate(db_molecule)
 
+  def bulk_insert_molecules(self, molecules: list[MoleculeInDB]):
+    if not molecules:
+      return
+
+    molecule_mappings = [m.model_dump() for m in molecules]
+    self.db.bulk_insert_mappings(Molecule, molecule_mappings)
+    self.db.commit()
+
   def search(
     self,
     min_mol_weight: float | None = None,

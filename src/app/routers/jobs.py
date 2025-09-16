@@ -1,22 +1,26 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
+from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
-from src.app.dependencies import redis_conn
+from ..dependencies import get_redis_queue
 
 router = APIRouter()
 
 
 @router.get("/jobs/{job_id}")
-def get_job_status(job_id: str):
+async def get_job_status(job_id: str, queue=Depends(get_redis_queue)):
+  """
+  Get the status and result of a background job.
+  """
   try:
-    job = Job.fetch(job_id, connection=redis_conn)
-  except Exception:
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+    job = Job.fetch(job_id, connection=queue.connection)
+  except NoSuchJobError:
+    raise HTTPException(status_code=404, detail="Job not found")
 
   response = {
     "job_id": job.id,
     "status": job.get_status(),
-    "result": job.return_value() if job.is_finished else None,
-    "error": job.exc_info if job.is_failed else None,
+    "progress": job.meta.get("progress", 0),
+    "result": job.result,
   }
   return response

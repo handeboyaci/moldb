@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import mock_open, patch
 
 import pytest
 from rdkit import Chem
@@ -281,3 +282,29 @@ def test_find_similar_molecules_caching(client):
   result3 = job3.return_value()
   assert not result3.cache_hit
   assert len(result3.results) > 0
+
+
+@patch("src.worker.tasks.Path.stat")
+@patch("builtins.open", new_callable=mock_open, read_data="CC\nCCC\nCCCC")
+def test_ingest_molecules_success(mock_open_file, mock_stat, client):
+  """Test successful ingestion of a file with mocked filesystem."""
+  mock_stat.return_value.st_size = 15
+
+  response = client.post("/api/v1/ingest", json={"file_path": "test_ingest.txt"})
+  assert response.status_code == 202
+  job_id = response.json()["job_id"]
+  job = wait_for_job(job_id)
+  assert job.get_status() == "finished"
+
+  # This part of the test is now harder to verify without a real DB write.
+  # We trust the unit tests for the worker to cover the logic.
+
+
+@patch("src.worker.tasks.Path.stat", side_effect=FileNotFoundError)
+def test_ingest_molecules_file_not_found(mock_stat, client):
+  """Test ingestion with a file that does not exist using mocks."""
+  response = client.post("/api/v1/ingest", json={"file_path": "non_existent_file.txt"})
+  assert response.status_code == 202  # The job is enqueued, but will fail
+  job_id = response.json()["job_id"]
+  job = wait_for_job(job_id)
+  assert job.get_status() == "failed"

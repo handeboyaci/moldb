@@ -6,6 +6,7 @@ from src.app.decorators import asynchronous_task
 from src.worker.tasks import (
   create_molecule_task,
   find_similar_molecules_task,
+  ingest_file_job,
   search_molecules_task,
   substructure_search_task,
 )
@@ -20,6 +21,10 @@ from ..models.molecule import (
 router = APIRouter()
 
 
+class IngestRequest(BaseModel):
+  file_path: str
+
+
 class SimilaritySearchRequest(BaseModel):
   smiles: str
   min_similarity: float = 0.7
@@ -28,6 +33,12 @@ class SimilaritySearchRequest(BaseModel):
 
 class SubstructureSearchRequest(BaseModel):
   smiles: str
+
+
+@router.post("/ingest", status_code=202)
+@asynchronous_task
+def ingest_molecules(request: IngestRequest, db: Session = Depends(dependencies.get_db)):
+  return ingest_file_job, request.file_path
 
 
 @router.post("/molecule", response_model=MoleculeOut)

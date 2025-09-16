@@ -94,3 +94,46 @@ class MoleculeService:
 
   def substructure_search(self, smiles: str):
     return self.repository.substructure_search(smiles)
+
+  def create_molecules_from_smiles(self, smiles_list: list[str], starting_line: int):
+    molecules_to_create = []
+    errors = []
+    for i, smiles in enumerate(smiles_list):
+      smiles = smiles.strip()
+      if not smiles:
+        continue
+      try:
+        mol = MolFromSmiles(smiles)
+        if mol is None:
+          raise ValueError("Invalid SMILES string")
+
+        inchi = MolToInchi(mol)
+        inchikey = MolToInchiKey(mol)
+
+        molecule_data = MoleculeInDB(
+          id=uuid4(),
+          inchi=inchi,
+          inchikey=inchikey,
+          smiles=smiles,
+          mol=mol,
+          molecular_weight=Descriptors.MolWt(mol),
+          chemical_formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
+          logp=Descriptors.MolLogP(mol),
+          tpsa=Descriptors.TPSA(mol),
+          h_bond_donors=Descriptors.NumHDonors(mol),
+          h_bond_acceptors=Descriptors.NumHAcceptors(mol),
+          rotatable_bonds=Descriptors.NumRotatableBonds(mol),
+          morgan_fingerprint=rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048),
+        )
+        molecules_to_create.append(molecule_data)
+      except Exception as e:
+        errors.append({"line_number": starting_line + i, "smiles": smiles, "error": str(e)})
+
+    if molecules_to_create:
+      self.repository.bulk_insert_molecules(molecules_to_create)
+
+    return {
+      "successfully_ingested": len(molecules_to_create),
+      "failed_count": len(errors),
+      "errors": errors,
+    }
