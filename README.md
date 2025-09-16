@@ -128,7 +128,7 @@ curl "http://localhost:8000/api/v1/search?min_mol_weight=40&max_mol_weight=50"
 
 ### 4. Find Similar Molecules (`POST /api/v1/search/similar`)
 
-Finds molecules in the database similar to a given SMILES string based on Tanimoto similarity of Morgan fingerprints.
+Finds molecules in the database similar to a given SMILES string based on Tanimoto similarity of Morgan fingerprints. This endpoint uses Redis caching to speed up repeated searches.
 
 **Request:**
 ```bash
@@ -138,9 +138,41 @@ curl -X POST \
   -d 
   {
     "smiles": "CCO",
-    "min_similarity": 0.7
+    "min_similarity": 0.7,
+    "force_recompute": false
   }
 ```
+- `smiles` (string, required): The SMILES string of the query molecule.
+- `min_similarity` (float, optional, default: 0.7): The minimum similarity threshold.
+- `force_recompute` (boolean, optional, default: false): If `true`, the cache will be bypassed and the search will be re-executed against the database.
+
+**Successful Response (HTTP 202 Accepted):**
+The job result will contain the search results.
+
+**Job Result:**
+```json
+{
+  "cache_hit": false,
+  "results": [
+    {
+      "id": "...",
+      "inchi": "...",
+      "inchikey": "...",
+      "smiles": "CCO",
+      "molecular_weight": 46.069,
+      "chemical_formula": "C2H6O",
+      "logp": -0.0014,
+      "tpsa": 20.23,
+      "h_bond_donors": 1,
+      "h_bond_acceptors": 1,
+      "rotatable_bonds": 0,
+      "similarity_score": 1.0
+    }
+  ]
+}
+```
+- `cache_hit` (boolean): `true` if the results were served from the cache, `false` otherwise.
+- `results` (array): A list of similar molecules.
 
 ### 5. Substructure Search (`POST /api/v1/search/substructure`)
 

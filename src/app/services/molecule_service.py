@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 
 from ..models.molecule import MoleculeInDB
 from ..repositories.molecule_repository import MoleculeRepository
+from .cache_service import get_redis_client
 
 
 class MoleculeService:
   def __init__(self, db: Session):
-    self.repository = MoleculeRepository(db)
+    self.repository = MoleculeRepository(db, get_redis_client())
 
   def create_molecule(self, smiles: str):
     print(f"Attempting to create molecule for SMILES: {smiles}")
@@ -88,8 +89,8 @@ class MoleculeService:
       chemical_formula=chemical_formula,
     )
 
-  def find_similar_molecules(self, smiles: str, min_similarity: float = 0.7):
-    return self.repository.find_similar(smiles, min_similarity)
+  def find_similar_molecules(self, smiles: str, min_similarity: float = 0.7, force_recompute: bool = False):
+    return self.repository.find_similar(smiles, min_similarity, force_recompute)
 
   def substructure_search(self, smiles: str):
     return self.repository.substructure_search(smiles)

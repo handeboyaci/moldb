@@ -107,15 +107,16 @@ def seed_molecules(db_session):
 
 
 def wait_for_job(job_id):
-    import time
-    start_time = time.time()
-    job = Job.fetch(job_id, connection=redis_conn)
-    while job.get_status() not in ['finished', 'failed']:
-        time.sleep(0.1)
-        job.refresh()
-        if time.time() - start_time > 10:
-            raise TimeoutError("Job did not finish in 10 seconds")
-    return job
+  import time
+
+  start_time = time.time()
+  job = Job.fetch(job_id, connection=redis_conn)
+  while job.get_status() not in ["finished", "failed"]:
+    time.sleep(0.1)
+    job.refresh()
+    if time.time() - start_time > 10:
+      raise TimeoutError("Job did not finish in 10 seconds")
+  return job
 
 
 @pytest.mark.usefixtures("seed_molecules")
@@ -171,10 +172,10 @@ def test_find_similar_molecules(client):
   job = wait_for_job(response.json()["job_id"])
   assert job.get_status() == "finished"
   result = job.return_value()
-  assert len(result) > 0
-  assert result[0].smiles == "CCO"
-  assert hasattr(result[0], "similarity_score")
-  assert result[0].similarity_score == 1.0
+  assert len(result.results) > 0
+  assert result.results[0].smiles == "CCO"
+  assert hasattr(result.results[0], "similarity_score")
+  assert result.results[0].similarity_score == 1.0
 
 
 @pytest.mark.usefixtures("seed_molecules")
@@ -245,3 +246,38 @@ def test_search_molecules_with_chemical_identifiers(client):
   job = wait_for_job(response.json()["job_id"])
   result = job.return_value()
   assert len(result) == 0
+
+
+@pytest.mark.usefixtures("seed_molecules")
+def test_find_similar_molecules_caching(client):
+  # Clear cache for this test
+  redis_conn.flushdb()
+
+  # 1. First call, should miss cache
+  response1 = client.post("/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7})
+  assert response1.status_code == 202
+  job1 = wait_for_job(response1.json()["job_id"])
+  assert job1.get_status() == "finished"
+  result1 = job1.return_value()
+  assert not result1.cache_hit
+  assert len(result1.results) > 0
+
+  # 2. Second call, should hit cache
+  response2 = client.post("/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7})
+  assert response2.status_code == 202
+  job2 = wait_for_job(response2.json()["job_id"])
+  assert job2.get_status() == "finished"
+  result2 = job2.return_value()
+  assert result2.cache_hit
+  assert len(result2.results) > 0
+
+  # 3. Third call, with force_recompute, should miss cache
+  response3 = client.post(
+    "/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7, "force_recompute": True}
+  )
+  assert response3.status_code == 202
+  job3 = wait_for_job(response3.json()["job_id"])
+  assert job3.get_status() == "finished"
+  result3 = job3.return_value()
+  assert not result3.cache_hit
+  assert len(result3.results) > 0

@@ -8,3 +8,4 @@ sqlalchemy
 uvicorn
 requests
 rq
+redis

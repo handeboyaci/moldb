@@ -68,3 +68,8 @@ class MoleculeOut(BaseModel):
 
 class MoleculeWithSimilarity(MoleculeOut):
   similarity_score: float
+
+
+class SimilaritySearchResults(BaseModel):
+  cache_hit: bool
+  results: list[MoleculeWithSimilarity]

@@ -1,4 +1,5 @@
 from rq.job import Job
+
 from src.app.dependencies import redis_conn
 
 

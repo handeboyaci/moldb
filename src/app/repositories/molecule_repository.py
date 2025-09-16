@@ -1,15 +1,25 @@
+import json
 from uuid import UUID
 
-from rdkit import Chem, DataStructs
-from rdkit.Chem import rdMolDescriptors
+import redis
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..models.molecule import Molecule, MoleculeInDB, MoleculeOut
+from ..models.molecule import (
+  Molecule,
+  MoleculeInDB,
+  MoleculeOut,
+  MoleculeWithSimilarity,
+  SimilaritySearchResults,
+)
 
 
 class MoleculeRepository:
-  def __init__(self, db: Session):
+  def __init__(self, db: Session, redis_client: redis.Redis):
     self.db = db
+    self.redis_client = redis_client
 
   def create_molecule(self, molecule: MoleculeInDB):
     db_molecule = Molecule(**molecule.model_dump())
@@ -75,25 +85,68 @@ class MoleculeRepository:
   def find_by_id(self, molecule_id: UUID):
     return self.db.query(Molecule).filter(Molecule.id == molecule_id).first()
 
-  def find_similar(self, smiles: str, min_similarity: float):
+  def find_similar(self, smiles: str, min_similarity: float, force_recompute: bool = False) -> SimilaritySearchResults:
     query_mol = Chem.MolFromSmiles(smiles)
     if query_mol is None:
-      return []
-    query_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(query_mol, 2, nBits=2048)
+      return SimilaritySearchResults(cache_hit=False, results=[])
+
+    inchikey = AllChem.MolToInchiKey(query_mol)
+    cache_key = f"similarity:{inchikey}:{min_similarity:.2f}"
+
+    if not force_recompute:
+      cached_results = self.redis_client.get(cache_key)
+      if cached_results:
+        results_json = json.loads(cached_results)
+        results = [MoleculeWithSimilarity.model_validate(res) for res in results_json]
+        return SimilaritySearchResults(cache_hit=True, results=results)
+
+    sql = text("""
+        SELECT
+            id,
+            smiles,
+            molecular_weight,
+            logp,
+            tpsa,
+            h_bond_donors,
+            h_bond_acceptors,
+            rotatable_bonds,
+            inchi,
+            inchikey,
+            chemical_formula,
+            tanimoto_sml(morgan_fingerprint::bfp, morganbv_fp(mol_from_smiles(:smiles))) as similarity_score
+        FROM molecules
+        WHERE morgan_fingerprint::bfp % morganbv_fp(mol_from_smiles(:smiles))
+        AND tanimoto_sml(morgan_fingerprint::bfp, morganbv_fp(mol_from_smiles(:smiles))) >= :min_similarity
+        ORDER BY similarity_score DESC;
+    """)
+
+    result = self.db.execute(sql, {"smiles": smiles, "min_similarity": min_similarity})
 
     similar_molecules = []
-    all_molecules = self.db.query(Molecule).all()
-
-    for mol_in_db in all_molecules:
-      if mol_in_db.mol is not None:
-        db_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol_in_db.mol, 2, nBits=2048)
-        similarity = DataStructs.TanimotoSimilarity(query_fp, db_fp)
-        if similarity >= min_similarity:
-          mol_in_db.similarity_score = similarity
-          similar_molecules.append(mol_in_db)
+    for row in result:
+      mol_data = {
+        "id": row.id,
+        "smiles": row.smiles,
+        "molecular_weight": row.molecular_weight,
+        "logp": row.logp,
+        "tpsa": row.tpsa,
+        "h_bond_donors": row.h_bond_donors,
+        "h_bond_acceptors": row.h_bond_acceptors,
+        "rotatable_bonds": row.rotatable_bonds,
+        "inchi": row.inchi,
+        "inchikey": row.inchikey,
+        "chemical_formula": row.chemical_formula,
+        "similarity_score": row.similarity_score,
+      }
+      similar_molecules.append(MoleculeWithSimilarity.model_validate(mol_data))
 
     similar_molecules.sort(key=lambda x: x.similarity_score, reverse=True)
-    return similar_molecules
+
+    # Serialize for caching
+    results_to_cache = [res.model_dump() for res in similar_molecules]
+    self.redis_client.set(cache_key, json.dumps(results_to_cache, default=str), ex=3600)  # 1 hour expiration
+
+    return SimilaritySearchResults(cache_hit=False, results=similar_molecules)
 
   def substructure_search(self, smiles: str):
     query_substructure = Chem.MolFromSmiles(smiles)

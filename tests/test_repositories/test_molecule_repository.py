@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import Mock
 
 import pytest
 from rdkit import Chem
@@ -9,8 +10,15 @@ from src.app.repositories.molecule_repository import MoleculeRepository
 
 
 @pytest.fixture(scope="function")
-def repository(db_session):
-  return MoleculeRepository(db_session)
+def mock_redis_client():
+  mock = Mock()
+  mock.get.return_value = None
+  return mock
+
+
+@pytest.fixture(scope="function")
+def repository(db_session, mock_redis_client):
+  return MoleculeRepository(db_session, mock_redis_client)
 
 
 def test_search_no_filters(repository, db_session):
@@ -205,14 +213,14 @@ def test_find_similar(repository, db_session):
   db_session.flush()
 
   # Search for molecules similar to Ethanol
-  similar_molecules = repository.find_similar(smiles="CCO", min_similarity=0.1)
+  similar_molecules_result = repository.find_similar(smiles="CCO", min_similarity=0.1)
 
-  assert len(similar_molecules) > 0
+  assert len(similar_molecules_result.results) > 0
   # The most similar molecule should be ethanol itself
-  assert similar_molecules[0].smiles == "CCO"
-  assert hasattr(similar_molecules[0], "similarity_score")
+  assert similar_molecules_result.results[0].smiles == "CCO"
+  assert hasattr(similar_molecules_result.results[0], "similarity_score")
   # The similarity of a molecule with itself is 1.0
-  assert similar_molecules[0].similarity_score == 1.0
+  assert similar_molecules_result.results[0].similarity_score == 1.0
 
 
 def test_substructure_search(repository, db_session):

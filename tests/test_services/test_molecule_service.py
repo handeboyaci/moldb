@@ -16,7 +16,9 @@ def mock_molecule_repository():
 
 
 @pytest.fixture
-def molecule_service(mock_molecule_repository):
+def molecule_service(mock_molecule_repository, monkeypatch):
+  mock_redis = Mock()
+  monkeypatch.setattr("src.app.services.molecule_service.get_redis_client", lambda: mock_redis)
   service = MoleculeService(db=Mock())
   service.repository = mock_molecule_repository
   return service
@@ -160,7 +162,7 @@ def test_find_similar_molecules(molecule_service, mock_molecule_repository):
   result = molecule_service.find_similar_molecules(smiles, min_similarity)
 
   # Assert
-  mock_molecule_repository.find_similar.assert_called_once_with(smiles, min_similarity)
+  mock_molecule_repository.find_similar.assert_called_once_with(smiles, min_similarity, False)
   assert result == mock_return
 
 

@@ -14,10 +14,10 @@ def search_molecules_task(search_params: dict):
   return service.search_molecules(**search_params)
 
 
-def find_similar_molecules_task(smiles: str, min_similarity: float):
+def find_similar_molecules_task(smiles: str, min_similarity: float, force_recompute: bool = False):
   db = next(dependencies.get_db())
   service = MoleculeService(db)
-  return service.find_similar_molecules(smiles, min_similarity)
+  return service.find_similar_molecules(smiles, min_similarity, force_recompute)
 
 
 def substructure_search_task(smiles: str):

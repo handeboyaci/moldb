@@ -11,7 +11,11 @@ from src.worker.tasks import (
 )
 
 from .. import dependencies
-from ..models.molecule import MoleculeCreate, MoleculeOut, MoleculeWithSimilarity
+from ..models.molecule import (
+  MoleculeCreate,
+  MoleculeOut,
+  SimilaritySearchResults,
+)
 
 router = APIRouter()
 
@@ -19,6 +23,7 @@ router = APIRouter()
 class SimilaritySearchRequest(BaseModel):
   smiles: str
   min_similarity: float = 0.7
+  force_recompute: bool = False
 
 
 class SubstructureSearchRequest(BaseModel):
@@ -75,10 +80,10 @@ def search_molecules(
   return search_molecules_task, search_params
 
 
-@router.post("/search/similar", response_model=list[MoleculeWithSimilarity])
+@router.post("/search/similar", response_model=SimilaritySearchResults)
 @asynchronous_task
 def find_similar_molecules(request: SimilaritySearchRequest, db: Session = Depends(dependencies.get_db)):
-  return find_similar_molecules_task, request.smiles, request.min_similarity
+  return find_similar_molecules_task, request.smiles, request.min_similarity, request.force_recompute
 
 
 @router.post("/search/substructure", response_model=list[MoleculeOut])

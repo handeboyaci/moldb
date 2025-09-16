@@ -1,12 +1,13 @@
 import pytest
+from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from alembic import command
 from src.app.config import settings
 from src.app.dependencies import get_db
 from src.app.main import app
-from src.app.models.molecule import Base
 
 
 @pytest.fixture(scope="session")
@@ -17,9 +18,16 @@ def db_engine():
   engine = create_engine(
     settings.DATABASE_URL,
   )
-  Base.metadata.create_all(bind=engine)
+
+  with engine.connect() as connection:
+    connection.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+    connection.commit()
+
+  alembic_cfg = Config("alembic.ini")
+  alembic_cfg.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))
+  command.upgrade(alembic_cfg, "head")
+
   yield engine
-  Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(scope="function")
@@ -47,6 +55,7 @@ def client(db_session):
   overridden to use the transactional session.
   """
   settings.TESTING = True
+
   def override_get_db():
     yield db_session
 
