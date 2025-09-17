@@ -1,54 +1,94 @@
+from concurrent.futures import ProcessPoolExecutor
 from uuid import uuid4
 
 from rdkit import Chem
-from rdkit.Chem import Descriptors, MolFromSmiles, MolToInchi, MolToInchiKey, rdMolDescriptors
+from rdkit.Chem import (
+  Descriptors,
+  MolFromSmiles,
+  MolToInchi,
+  MolToInchiKey,
+  rdFingerprintGenerator,
+)
 from sqlalchemy.orm import Session
 
 from ..models.molecule import MoleculeInDB
 from ..repositories.molecule_repository import MoleculeRepository
 from .cache_service import get_redis_client
 
+# FingerprintGenerator singleton.
+_fpgen = None
+
+
+def _process_smiles(smiles: str) -> MoleculeInDB | None:
+  """
+  Helper function to process a single SMILES string.
+  This function is designed to be run in a separate process.
+  """
+  smiles = smiles.strip()
+  if not smiles:
+    return None
+  try:
+    mol = MolFromSmiles(smiles)
+    if mol is None:
+      raise ValueError("Invalid SMILES string")
+
+    morgan_fingerprint = _fpgen.GetFingerprint(mol)
+
+    return MoleculeInDB(
+      id=uuid4(),
+      inchi=MolToInchi(mol),
+      inchikey=MolToInchiKey(mol),
+      smiles=smiles,
+      mol=mol,
+      molecular_weight=Descriptors.MolWt(mol),
+      chemical_formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
+      logp=Descriptors.MolLogP(mol),
+      tpsa=Descriptors.TPSA(mol),
+      h_bond_donors=Descriptors.NumHDonors(mol),
+      h_bond_acceptors=Descriptors.NumHAcceptors(mol),
+      rotatable_bonds=Descriptors.NumRotatableBonds(mol),
+      morgan_fingerprint=morgan_fingerprint,
+    )
+  except Exception:
+    return None
+
 
 class MoleculeService:
   def __init__(self, db: Session):
     self.repository = MoleculeRepository(db, get_redis_client())
+    global _fpgen
+    if _fpgen is None:
+      _fpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
   def create_molecule(self, smiles: str):
-    print(f"Attempting to create molecule for SMILES: {smiles}")
     mol = MolFromSmiles(smiles)
     if mol is None:
-      print(f"Invalid SMILES string: {smiles}")
       raise ValueError("Invalid SMILES string")
 
-    print("SMILES converted to RDKit mol object.")
-    inchi = MolToInchi(mol)
     inchikey = MolToInchiKey(mol)
-    molecular_weight = Descriptors.MolWt(mol)
-    chemical_formula = Chem.rdMolDescriptors.CalcMolFormula(mol)
-    logp = Descriptors.MolLogP(mol)
-    tpsa = Descriptors.TPSA(mol)
-    h_bond_donors = Descriptors.NumHDonors(mol)
-    h_bond_acceptors = Descriptors.NumHAcceptors(mol)
-    rotatable_bonds = Descriptors.NumRotatableBonds(mol)
-    morgan_fingerprint = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
-    print("Molecular properties and fingerprint calculated.")
 
+    # First, check if the molecule already exists.
+    existing_molecule = self.repository.find_by_inchikey(inchikey)
+    if existing_molecule:
+      return existing_molecule
+
+    # If it doesn't exist, create it.
     molecule_data = MoleculeInDB(
       id=uuid4(),
-      inchi=inchi,
+      inchi=MolToInchi(mol),
       inchikey=inchikey,
       smiles=smiles,
       mol=mol,
-      molecular_weight=molecular_weight,
-      chemical_formula=chemical_formula,
-      logp=logp,
-      tpsa=tpsa,
-      h_bond_donors=h_bond_donors,
-      h_bond_acceptors=h_bond_acceptors,
-      rotatable_bonds=rotatable_bonds,
-      morgan_fingerprint=morgan_fingerprint,
+      molecular_weight=Descriptors.MolWt(mol),
+      chemical_formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
+      logp=Descriptors.MolLogP(mol),
+      tpsa=Descriptors.TPSA(mol),
+      h_bond_donors=Descriptors.NumHDonors(mol),
+      h_bond_acceptors=Descriptors.NumHAcceptors(mol),
+      rotatable_bonds=Descriptors.NumRotatableBonds(mol),
+      morgan_fingerprint=_fpgen.GetFingerprint(mol),
     )
-    print("MoleculeInDB object created.")
+
     return self.repository.create_molecule(molecule_data)
 
   def search_molecules(
@@ -69,6 +109,8 @@ class MoleculeService:
     inchikey: str | None = None,
     smiles: str | None = None,
     chemical_formula: str | None = None,
+    skip: int = 0,
+    limit: int = 100,
   ):
     return self.repository.search(
       min_mol_weight=min_mol_weight,
@@ -87,47 +129,39 @@ class MoleculeService:
       inchikey=inchikey,
       smiles=smiles,
       chemical_formula=chemical_formula,
+      skip=skip,
+      limit=limit,
     )
 
-  def find_similar_molecules(self, smiles: str, min_similarity: float = 0.7, force_recompute: bool = False):
+  def find_similar_molecules(
+    self,
+    smiles: str,
+    min_similarity: float = 0.7,
+    force_recompute: bool = False,
+  ):
     return self.repository.find_similar(smiles, min_similarity, force_recompute)
 
-  def substructure_search(self, smiles: str):
-    return self.repository.substructure_search(smiles)
+  def substructure_search(self, smiles: str, skip: int = 0, limit: int = 100):
+    return self.repository.substructure_search(smiles, skip=skip, limit=limit)
 
   def create_molecules_from_smiles(self, smiles_list: list[str], starting_line: int):
     molecules_to_create = []
     errors = []
-    for i, smiles in enumerate(smiles_list):
-      smiles = smiles.strip()
-      if not smiles:
-        continue
-      try:
-        mol = MolFromSmiles(smiles)
-        if mol is None:
-          raise ValueError("Invalid SMILES string")
 
-        inchi = MolToInchi(mol)
-        inchikey = MolToInchiKey(mol)
+    with ProcessPoolExecutor() as executor:
+      results = executor.map(_process_smiles, smiles_list)
 
-        molecule_data = MoleculeInDB(
-          id=uuid4(),
-          inchi=inchi,
-          inchikey=inchikey,
-          smiles=smiles,
-          mol=mol,
-          molecular_weight=Descriptors.MolWt(mol),
-          chemical_formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
-          logp=Descriptors.MolLogP(mol),
-          tpsa=Descriptors.TPSA(mol),
-          h_bond_donors=Descriptors.NumHDonors(mol),
-          h_bond_acceptors=Descriptors.NumHAcceptors(mol),
-          rotatable_bonds=Descriptors.NumRotatableBonds(mol),
-          morgan_fingerprint=rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048),
+    for i, result in enumerate(results):
+      if result:
+        molecules_to_create.append(result)
+      else:
+        errors.append(
+          {
+            "line_number": starting_line + i,
+            "smiles": smiles_list[i],
+            "error": "Invalid SMILES or processing error",
+          }
         )
-        molecules_to_create.append(molecule_data)
-      except Exception as e:
-        errors.append({"line_number": starting_line + i, "smiles": smiles, "error": str(e)})
 
     if molecules_to_create:
       self.repository.bulk_insert_molecules(molecules_to_create)

@@ -1,38 +1,46 @@
 from rdkit import Chem, DataStructs
-from sqlalchemy.types import LargeBinary, String, TypeDecorator
+from sqlalchemy.types import UserDefinedType
 
 
-class RDKitMolType(TypeDecorator):
-  impl = LargeBinary
+class RDKitMolType(UserDefinedType):
+  def get_col_spec(self):
+    return "mol"
 
-  cache_ok = True
-
-  def process_bind_param(self, value, dialect):
-    if value is None:
+  def bind_processor(self, dialect):
+    def process(value):
+      if value is None:
+        return None
+      if isinstance(value, Chem.Mol):
+        return Chem.MolToSmiles(value)
       return value
-    if isinstance(value, Chem.Mol):
-      return value.ToBinary()
-    raise ValueError("Expected an RDKit Mol object.")
 
-  def process_result_value(self, value, dialect):
-    if value is None:
-      return value
-    return Chem.Mol(value)
+    return process
+
+  def result_processor(self, dialect, coltype):
+    def process(value):
+      if value is None:
+        return None
+      return Chem.MolFromSmiles(value)
+
+    return process
 
 
-class RDKitBfpType(TypeDecorator):
-  impl = String  # Store as binary text representation
+class RDKitBfpType(UserDefinedType):
+  def get_col_spec(self):
+    return "bfp"
 
-  cache_ok = True
+  def bind_processor(self, dialect):
+    def process(value):
+      if value is None:
+        return None
+      return DataStructs.BitVectToFPSText(value)
 
-  def process_bind_param(self, value, dialect):
-    if value is None:
-      return value
-    if isinstance(value, DataStructs.ExplicitBitVect):
-      return DataStructs.BitVectToText(value)  # Use BitVectToText for string representation
-    raise ValueError("Expected an RDKit ExplicitBitVect object.")
+    return process
 
-  def process_result_value(self, value, dialect):
-    if value is None:
-      return value
-    return DataStructs.CreateFromFPSText(value)  # Use CreateFromFPSText to reconstruct from string
+  def result_processor(self, dialect, coltype):
+    def process(value):
+      if value is None:
+        return None
+      return DataStructs.CreateFromFPSText(value)
+
+    return process

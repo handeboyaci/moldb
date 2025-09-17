@@ -18,7 +18,9 @@ def mock_molecule_repository():
 @pytest.fixture
 def molecule_service(mock_molecule_repository, monkeypatch):
   mock_redis = Mock()
-  monkeypatch.setattr("src.app.services.molecule_service.get_redis_client", lambda: mock_redis)
+  monkeypatch.setattr(
+    "src.app.services.molecule_service.get_redis_client", lambda: mock_redis
+  )
   service = MoleculeService(db=Mock())
   service.repository = mock_molecule_repository
   return service
@@ -53,6 +55,8 @@ def test_search_molecules(molecule_service, mock_molecule_repository):
     inchikey=None,
     smiles=None,
     chemical_formula=None,
+    skip=0,
+    limit=100,
   )
   assert result == mock_molecules
 
@@ -86,6 +90,8 @@ def test_search_molecules_no_filters(molecule_service, mock_molecule_repository)
     inchikey=None,
     smiles=None,
     chemical_formula=None,
+    skip=0,
+    limit=100,
   )
   assert result == mock_molecules
 
@@ -118,6 +124,8 @@ def test_search_molecules_with_inchi(molecule_service, mock_molecule_repository)
     inchikey=None,
     smiles=None,
     chemical_formula=None,
+    skip=0,
+    limit=100,
   )
   assert result == mock_molecules
 
@@ -125,6 +133,9 @@ def test_search_molecules_with_inchi(molecule_service, mock_molecule_repository)
 def test_create_molecule_success(molecule_service, mock_molecule_repository):
   # Arrange
   smiles = "CCO"
+  mock_molecule_repository.find_by_inchikey.return_value = (
+    None  # Molecule doesn't exist
+  )
   mock_molecule_repository.create_molecule.return_value = "some_molecule"
 
   # Act
@@ -162,7 +173,9 @@ def test_find_similar_molecules(molecule_service, mock_molecule_repository):
   result = molecule_service.find_similar_molecules(smiles, min_similarity)
 
   # Assert
-  mock_molecule_repository.find_similar.assert_called_once_with(smiles, min_similarity, False)
+  mock_molecule_repository.find_similar.assert_called_once_with(
+    smiles, min_similarity, False
+  )
   assert result == mock_return
 
 
@@ -176,5 +189,7 @@ def test_substructure_search(molecule_service, mock_molecule_repository):
   result = molecule_service.substructure_search(smiles)
 
   # Assert
-  mock_molecule_repository.substructure_search.assert_called_once_with(smiles)
+  mock_molecule_repository.substructure_search.assert_called_once_with(
+    smiles, skip=0, limit=100
+  )
   assert result == mock_return

@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.worker.tasks import _aggregate_results_job, _ingest_file_job, _process_chunk_job
+from src.worker.tasks import (
+  _aggregate_results_job,
+  _ingest_file_job,
+  _process_chunk_job,
+)
 
 
 @pytest.fixture
@@ -40,7 +44,10 @@ def test_ingest_file_job_success(mock_rq_job):
 
 def test_ingest_file_job_file_not_found(mock_rq_job):
   """Test ingest_file_job raises ValueError for a file that doesn't exist."""
-  with patch("src.worker.tasks.Path.stat", side_effect=FileNotFoundError), pytest.raises(FileNotFoundError):
+  with (
+    patch("src.worker.tasks.Path.stat", side_effect=FileNotFoundError),
+    pytest.raises(FileNotFoundError),
+  ):
     _ingest_file_job("non_existent_file.txt")
 
 
@@ -77,7 +84,9 @@ def test_process_chunk_job(MockMoleculeService, mock_get_db, mock_redis_conn):
     _process_chunk_job(smiles_list, starting_line)
 
     # Assert
-    mock_service_instance.create_molecules_from_smiles.assert_called_once_with(smiles_list, starting_line)
+    mock_service_instance.create_molecules_from_smiles.assert_called_once_with(
+      smiles_list, starting_line
+    )
     mock_redis_conn.hset.assert_called_once()
 
 
@@ -94,8 +103,16 @@ def test_aggregate_results_job(mock_redis_conn, mock_job_fetch, mock_get_current
   mock_job_fetch.return_value = mock_parent_job
 
   results_hash = {
-    b"job1": json.dumps({"successfully_ingested": 10, "failed_count": 1, "errors": ["error1"]}),
-    b"job2": json.dumps({"successfully_ingested": 15, "failed_count": 2, "errors": ["error2", "error3"]}),
+    b"job1": json.dumps(
+      {"successfully_ingested": 10, "failed_count": 1, "errors": ["error1"]}
+    ),
+    b"job2": json.dumps(
+      {
+        "successfully_ingested": 15,
+        "failed_count": 2,
+        "errors": ["error2", "error3"],
+      }
+    ),
   }
   mock_redis_conn.hgetall.return_value = results_hash
 

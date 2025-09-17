@@ -39,6 +39,7 @@ def _ingest_file_job(file_path: str):
       job.meta["total_records"] = "Calculating..."
       job.save_meta()
     chunk_jobs = []
+    bytes_read = 0
     with open(full_path, "r") as f:
       chunk_size = settings.INGESTION_CHUNK_SIZE
       chunk_num = 0
@@ -46,25 +47,30 @@ def _ingest_file_job(file_path: str):
         chunk = list(islice(f, chunk_size))
         if not chunk:
           break
+        chunk_bytes = sum(len(line.encode("utf-8")) for line in chunk)
+        bytes_read += chunk_bytes
+
         if job:
-            chunk_job = process_chunk_job.delay(chunk, chunk_num * chunk_size, meta={"parent_job_id": job.id})
+          chunk_job = process_chunk_job.delay(
+            chunk, chunk_num * chunk_size, meta={"parent_job_id": job.id}
+          )
         else:
-            chunk_job = _process_chunk_job(chunk, chunk_num * chunk_size)
+          chunk_job = _process_chunk_job(chunk, chunk_num * chunk_size)
         chunk_jobs.append(chunk_job)
         chunk_num += 1
         if chunk_num % 5 == 0:
           if job:
-            progress = (f.tell() / total_size) * 100 if total_size > 0 else 100
+            progress = (bytes_read / total_size) * 100 if total_size > 0 else 100
             job.meta["progress"] = progress
             job.save_meta()
 
     if job:
-        aggregate_results_job.delay(job.id, depends_on=chunk_jobs)
-        job.meta["progress"] = 100
-        job.save_meta()
+      aggregate_results_job.delay(job.id, depends_on=chunk_jobs)
+      job.meta["progress"] = 100
+      job.save_meta()
     else:
-        # Sync case
-        return _aggregate_results_job(None, chunk_jobs)
+      # Sync case
+      return _aggregate_results_job(None, chunk_jobs)
 
   except FileNotFoundError:
     job.meta["status"] = "Error: File not found"
@@ -77,7 +83,7 @@ def _ingest_file_job(file_path: str):
 
 
 @job("default", connection=redis_conn)
-def process_chunk_job(smiles_list: list[str], starting_line: int):
+def process_chunk_job(smiles_list: list[str], starting_line: int, **kwargs):
   return _process_chunk_job(smiles_list, starting_line)
 
 
@@ -88,7 +94,9 @@ def _process_chunk_job(smiles_list: list[str], starting_line: int):
   results = service.create_molecules_from_smiles(smiles_list, starting_line)
   job = rq.get_current_job()
   if job:
-    redis_conn.hset(f"job:{job.meta['parent_job_id']}:results", job.id, json.dumps(results))
+    redis_conn.hset(
+      f"job:{job.meta['parent_job_id']}:results", job.id, json.dumps(results)
+    )
   return results
 
 
@@ -105,10 +113,10 @@ def _aggregate_results_job(parent_job_id: str, sync_results: list = None):
     job.save_meta()
 
   if sync_results:
-      results = sync_results
+    results = sync_results
   else:
-      results_hash = redis_conn.hgetall(f"job:{parent_job_id}:results")
-      results = [json.loads(r) for r in results_hash.values()]
+    results_hash = redis_conn.hgetall(f"job:{parent_job_id}:results")
+    results = [json.loads(r) for r in results_hash.values()]
 
   total_ingested = 0
   total_failed = 0
@@ -153,13 +161,15 @@ def search_molecules_task(search_params: dict):
   return service.search_molecules(**search_params)
 
 
-def find_similar_molecules_task(smiles: str, min_similarity: float, force_recompute: bool = False):
+def find_similar_molecules_task(
+  smiles: str, min_similarity: float, force_recompute: bool = False
+):
   db = next(dependencies.get_db())
   service = MoleculeService(db)
   return service.find_similar_molecules(smiles, min_similarity, force_recompute)
 
 
-def substructure_search_task(smiles: str):
+def substructure_search_task(smiles: str, skip: int, limit: int):
   db = next(dependencies.get_db())
   service = MoleculeService(db)
-  return service.substructure_search(smiles)
+  return service.substructure_search(smiles, skip, limit)

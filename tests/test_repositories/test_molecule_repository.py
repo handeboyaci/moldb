@@ -3,7 +3,6 @@ from unittest.mock import Mock
 
 import pytest
 from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors
 
 from src.app.models.molecule import Molecule
 from src.app.repositories.molecule_repository import MoleculeRepository
@@ -24,7 +23,7 @@ def repository(db_session, mock_redis_client):
 def test_search_no_filters(repository, db_session):
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -42,7 +41,7 @@ def test_search_no_filters(repository, db_session):
   )
   mol2_smiles = "CCC"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = repository.fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -68,7 +67,7 @@ def test_search_no_filters(repository, db_session):
 def test_search_with_min_mol_weight(repository, db_session):
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -86,7 +85,7 @@ def test_search_with_min_mol_weight(repository, db_session):
   )
   mol2_smiles = "CCC"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = repository.fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -112,7 +111,7 @@ def test_search_with_min_mol_weight(repository, db_session):
 def test_search_with_max_mol_weight(repository, db_session):
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -130,7 +129,7 @@ def test_search_with_max_mol_weight(repository, db_session):
   )
   mol2_smiles = "CCC"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = repository.fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -157,7 +156,7 @@ def test_find_similar(repository, db_session):
   # Add test data
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -175,7 +174,7 @@ def test_find_similar(repository, db_session):
   )
   mol2_smiles = "CCN"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = repository.fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -193,7 +192,7 @@ def test_find_similar(repository, db_session):
   )
   mol3_smiles = "C1CCCCC1"
   mol3_mol = Chem.MolFromSmiles(mol3_smiles)
-  mol3_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol3_mol, 2, nBits=2048)
+  mol3_fp = repository.fpgen.GetFingerprint(mol3_mol)
   mol3 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13"),
     inchi="inchi3",
@@ -227,7 +226,7 @@ def test_substructure_search(repository, db_session):
   # Add test data
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -245,7 +244,7 @@ def test_substructure_search(repository, db_session):
   )
   mol2_smiles = "CCN"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = repository.fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -263,7 +262,7 @@ def test_substructure_search(repository, db_session):
   )
   mol3_smiles = "C1CCCCC1"
   mol3_mol = Chem.MolFromSmiles(mol3_smiles)
-  mol3_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol3_mol, 2, nBits=2048)
+  mol3_fp = repository.fpgen.GetFingerprint(mol3_mol)
   mol3 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13"),
     inchi="inchi3",
@@ -293,7 +292,7 @@ def test_substructure_search(repository, db_session):
 def test_search_with_multiple_filters(repository, db_session):
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -311,7 +310,7 @@ def test_search_with_multiple_filters(repository, db_session):
   )
   mol2_smiles = "CCC"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = repository.fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -329,7 +328,7 @@ def test_search_with_multiple_filters(repository, db_session):
   )
   mol3_smiles = "C1CCCCC1"
   mol3_mol = Chem.MolFromSmiles(mol3_smiles)
-  mol3_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol3_mol, 2, nBits=2048)
+  mol3_fp = repository.fpgen.GetFingerprint(mol3_mol)
   mol3 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13"),
     inchi="inchi3",
@@ -362,7 +361,7 @@ def test_search_with_multiple_filters(repository, db_session):
 def test_search_with_chemical_identifiers(repository, db_session):
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = repository.fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",

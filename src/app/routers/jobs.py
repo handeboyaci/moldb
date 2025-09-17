@@ -21,6 +21,6 @@ async def get_job_status(job_id: str, queue=Depends(get_redis_queue)):
     "job_id": job.id,
     "status": job.get_status(),
     "progress": job.meta.get("progress", 0),
-    "result": job.result,
+    "result": job.return_value(),
   }
   return response

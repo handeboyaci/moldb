@@ -37,13 +37,21 @@ class SubstructureSearchRequest(BaseModel):
 
 @router.post("/ingest")
 @asynchronous_task
-def ingest_molecules(request: IngestRequest, sync: bool = False, db: Session = Depends(dependencies.get_db)):
+def ingest_molecules(
+  request: IngestRequest,
+  sync: bool = False,
+  db: Session = Depends(dependencies.get_db),
+):
   return ingest_file_job, request.file_path
 
 
 @router.post("/molecule", response_model=MoleculeOut)
 @asynchronous_task
-def create_molecule(request: MoleculeCreate, sync: bool = False, db: Session = Depends(dependencies.get_db)):
+def create_molecule(
+  request: MoleculeCreate,
+  sync: bool = False,
+  db: Session = Depends(dependencies.get_db),
+):
   # The actual logic is now in create_molecule_task
   # The decorator will enqueue this task.
   return create_molecule_task, request.smiles
@@ -68,6 +76,8 @@ def search_molecules(
   inchikey: str | None = None,
   smiles: str | None = None,
   chemical_formula: str | None = None,
+  skip: int = 0,
+  limit: int = 100,
   sync: bool = False,
   db: Session = Depends(dependencies.get_db),
 ):
@@ -88,6 +98,8 @@ def search_molecules(
     "inchikey": inchikey,
     "smiles": smiles,
     "chemical_formula": chemical_formula,
+    "skip": skip,
+    "limit": limit,
   }
   return search_molecules_task, search_params
 
@@ -95,14 +107,25 @@ def search_molecules(
 @router.post("/search/similar", response_model=SimilaritySearchResults)
 @asynchronous_task
 def find_similar_molecules(
-  request: SimilaritySearchRequest, sync: bool = False, db: Session = Depends(dependencies.get_db)
+  request: SimilaritySearchRequest,
+  sync: bool = False,
+  db: Session = Depends(dependencies.get_db),
 ):
-  return find_similar_molecules_task, request.smiles, request.min_similarity, request.force_recompute
+  return (
+    find_similar_molecules_task,
+    request.smiles,
+    request.min_similarity,
+    request.force_recompute,
+  )
 
 
 @router.post("/search/substructure", response_model=list[MoleculeOut])
 @asynchronous_task
 def substructure_search(
-  request: SubstructureSearchRequest, sync: bool = False, db: Session = Depends(dependencies.get_db)
+  request: SubstructureSearchRequest,
+  skip: int = 0,
+  limit: int = 100,
+  sync: bool = False,
+  db: Session = Depends(dependencies.get_db),
 ):
-  return substructure_search_task, request.smiles
+  return substructure_search_task, request.smiles, skip, limit

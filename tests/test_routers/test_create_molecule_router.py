@@ -28,15 +28,22 @@ def test_create_molecule_duplicate_inchi(client):
   # First creation should succeed
   response1 = client.post("/api/v1/molecule", json={"smiles": "CCO"})
   assert response1.status_code == 202
-  assert response1.json()["status"] == "finished"
+  data1 = response1.json()
+  assert data1["status"] == "finished"
+  job1 = Job.fetch(data1["job_id"], connection=redis_conn)
+  result1 = job1.return_value()
+  assert result1.smiles == "CCO"
 
-  # Second creation should fail
+  # Second creation should also succeed and return the existing molecule
   response2 = client.post("/api/v1/molecule", json={"smiles": "CCO"})
   assert response2.status_code == 202
-  data = response2.json()
-  assert data["status"] == "failed"
-  job = Job.fetch(data["job_id"], connection=redis_conn)
-  assert "IntegrityError" in job.latest_result().exc_string
+  data2 = response2.json()
+  assert data2["status"] == "finished"
+  job2 = Job.fetch(data2["job_id"], connection=redis_conn)
+  result2 = job2.return_value()
+
+  # Check that the returned molecule is the same one
+  assert result2.id == result1.id
 
 
 def test_create_molecule_missing_smiles(client):

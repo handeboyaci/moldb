@@ -16,10 +16,11 @@ moldb is a FastAPI-based application designed for managing and searching chemica
     *   Search by exact match for InChI, InChIKey, SMILES, and chemical formula.
     *   Similarity search based on chemical fingerprints.
     *   Substructure search to find molecules containing a specific substructure.
+*   **Pagination:** All search endpoints support `skip` and `limit` query parameters for easy navigation of large result sets.
+*   **Idempotent Creation:** Creating a molecule is an idempotent operation. If a molecule with the same chemical structure already exists, the existing molecule's data is returned instead of creating a duplicate.
 *   **FastAPI:** Provides a modern, fast (high-performance) web framework for building APIs.
 *   **PostgreSQL with RDKit:** Utilizes a robust relational database with the RDKit extension for cheminformatics capabilities, integrated using custom SQLAlchemy types.
 *   **Dockerized:** Easily deployable and runnable using Docker and Docker Compose.
-*   **Improved Error Handling:** Graceful handling of duplicate molecule creation attempts, returning a `409 Conflict` status.
 
 ## Getting Started
 
@@ -61,17 +62,16 @@ Here are detailed examples of how to interact with the API endpoints using `curl
 
 ### 1. Create Molecule (`POST /api/v1/molecule`)
 
-Creates a new chemical molecule in the database asynchronously.
+Creates a new chemical molecule in the database asynchronously. If a molecule with the same chemical structure (as determined by InChIKey) already exists, the job will succeed and return the data for the existing molecule.
 
 **Request:**
 ```bash
 curl -X POST \
   http://localhost:8000/api/v1/molecule \
   -H 'Content-Type: application/json' \
-  -d 
-  {
+  -d '{
     "smiles": "CCO"
-  }
+  }'
 ```
 
 **Successful Response (HTTP 202 Accepted):**
@@ -107,16 +107,15 @@ curl http://localhost:8000/api/v1/jobs/{job_id}
     "h_bond_donors": 1,
     "h_bond_acceptors": 1,
     "rotatable_bonds": 0
-  },
-  "error": null
+  }
 }
 ```
 
 ### 3. Search Molecules (`GET /api/v1/search`)
 
-Searches for molecules based on various property filters. All parameters are optional.
+Searches for molecules based on various property filters. All parameters are optional. This endpoint supports pagination using the `skip` and `limit` query parameters.
 
-**Request (No filters - returns all molecules):**
+**Request (No filters - returns first 100 molecules):**
 ```bash
 curl "http://localhost:8000/api/v1/search"
 ```
@@ -124,6 +123,11 @@ curl "http://localhost:8000/api/v1/search"
 **Request (Filter by molecular weight range):**
 ```bash
 curl "http://localhost:8000/api/v1/search?min_mol_weight=40&max_mol_weight=50"
+```
+
+**Request (With pagination):**
+```bash
+curl "http://localhost:8000/api/v1/search?skip=10&limit=5"
 ```
 
 ### 4. Find Similar Molecules (`POST /api/v1/search/similar`)
@@ -135,12 +139,11 @@ Finds molecules in the database similar to a given SMILES string based on Tanimo
 curl -X POST \
   http://localhost:8000/api/v1/search/similar \
   -H 'Content-Type: application/json' \
-  -d 
-  {
+  -d '{
     "smiles": "CCO",
     "min_similarity": 0.7,
     "force_recompute": false
-  }
+  }'
 ```
 - `smiles` (string, required): The SMILES string of the query molecule.
 - `min_similarity` (float, optional, default: 0.7): The minimum similarity threshold.
@@ -176,17 +179,16 @@ The job result will contain the search results.
 
 ### 5. Substructure Search (`POST /api/v1/search/substructure`)
 
-Finds molecules in the database that contain a given substructure (provided as a SMILES string).
+Finds molecules in the database that contain a given substructure (provided as a SMILES string). This endpoint supports pagination using the `skip` and `limit` query parameters.
 
 **Request:**
 ```bash
 curl -X POST \
-  http://localhost:8000/api/v1/search/substructure \
+  'http://localhost:8000/api/v1/search/substructure?skip=0&limit=10' \
   -H 'Content-Type: application/json' \
-  -d 
-  {
+  -d '{
     "smiles": "C"
-  }
+  }'
 ```
 
 ## Running Tests

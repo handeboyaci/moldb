@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdMolDescriptors
+from rdkit.Chem import AllChem, rdFingerprintGenerator
 
 from src.app.models.molecule import Molecule, MoleculeWithSimilarity
 from src.app.repositories.molecule_repository import MoleculeRepository
@@ -26,7 +26,10 @@ def repository(db_session, mock_redis_client):
 def db_with_data(db_session):
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+
+  mol1_fp = rdFingerprintGenerator.GetMorganGenerator(
+    radius=2, fpSize=2048
+  ).GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
@@ -77,8 +80,8 @@ def test_find_similar_caching_flow(repository, db_with_data, mock_redis_client):
   assert result2.cache_hit
   assert len(result2.results) == 1
   assert result2.results[0].smiles == "CCO"
-  # Ensure DB was not hit again
-  # (in this test, we can't easily check if the DB was hit, but we check that get was called)
+  # Ensure DB was not hit again (in this test, we can't easily check if the DB was hit,
+  # but we check that get was called)
   mock_redis_client.get.assert_called_with(cache_key)
 
 

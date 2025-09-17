@@ -3,7 +3,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors
+from rdkit.Chem import rdFingerprintGenerator
 from rq.job import Job
 
 from src.app.dependencies import redis_conn
@@ -13,9 +13,10 @@ from src.app.models.molecule import Molecule
 @pytest.fixture(scope="function")
 def seed_molecules(db_session):
   # Add test data
+  fpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
   mol1_smiles = "CCO"
   mol1_mol = Chem.MolFromSmiles(mol1_smiles)
-  mol1_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol1_mol, 2, nBits=2048)
+  mol1_fp = fpgen.GetFingerprint(mol1_mol)
   mol1 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
     inchi="inchi1",
@@ -33,7 +34,7 @@ def seed_molecules(db_session):
   )
   mol2_smiles = "CCC"
   mol2_mol = Chem.MolFromSmiles(mol2_smiles)
-  mol2_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol2_mol, 2, nBits=2048)
+  mol2_fp = fpgen.GetFingerprint(mol2_mol)
   mol2 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"),
     inchi="inchi2",
@@ -51,7 +52,7 @@ def seed_molecules(db_session):
   )
   mol3_smiles = "CCCC"
   mol3_mol = Chem.MolFromSmiles(mol3_smiles)
-  mol3_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol3_mol, 2, nBits=2048)
+  mol3_fp = fpgen.GetFingerprint(mol3_mol)
   mol3 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13"),
     inchi="inchi3",
@@ -69,7 +70,7 @@ def seed_molecules(db_session):
   )
   mol4_smiles = "C1=CC=C(C=C1)C(=O)O"  # Benzoic acid
   mol4_mol = Chem.MolFromSmiles(mol4_smiles)
-  mol4_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol4_mol, 2, nBits=2048)
+  mol4_fp = fpgen.GetFingerprint(mol4_mol)
   mol4 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14"),
     inchi="InChI=1S/C7H6O2/c8-7(9)6-4-2-1-3-5-6/h1-5H,(H,8,9)",
@@ -87,7 +88,7 @@ def seed_molecules(db_session):
   )
   mol5_smiles = "CN1C=NC2=C1C(=O)N(C(=O)N2C)C"  # Caffeine
   mol5_mol = Chem.MolFromSmiles(mol5_smiles)
-  mol5_fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol5_mol, 2, nBits=2048)
+  mol5_fp = fpgen.GetFingerprint(mol5_mol)
   mol5 = Molecule(
     id=uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15"),
     inchi="InChI=1S/C8H10N4O2/c1-10-4-9-3(8(13)14)12(2)7(11)5-6(4)10/h5H,1-2H3",
@@ -168,7 +169,9 @@ def test_search_molecules_with_min_and_max_mol_weight(client):
 
 @pytest.mark.usefixtures("seed_molecules")
 def test_find_similar_molecules(client):
-  response = client.post("/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.1})
+  response = client.post(
+    "/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.1}
+  )
   assert response.status_code == 202
   job = wait_for_job(response.json()["job_id"])
   assert job.get_status() == "finished"
@@ -210,7 +213,9 @@ def test_search_molecules_with_all_filters(client):
 @pytest.mark.usefixtures("seed_molecules")
 def test_search_molecules_with_chemical_identifiers(client):
   # Search by InChI
-  response = client.get("/api/v1/search?inchi=InChI=1S/C8H10N4O2/c1-10-4-9-3(8(13)14)12(2)7(11)5-6(4)10/h5H,1-2H3")
+  response = client.get(
+    "/api/v1/search?inchi=InChI=1S/C8H10N4O2/c1-10-4-9-3(8(13)14)12(2)7(11)5-6(4)10/h5H,1-2H3"
+  )
   assert response.status_code == 202
   job = wait_for_job(response.json()["job_id"])
   result = job.return_value()
@@ -255,7 +260,9 @@ def test_find_similar_molecules_caching(client):
   redis_conn.flushdb()
 
   # 1. First call, should miss cache
-  response1 = client.post("/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7})
+  response1 = client.post(
+    "/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7}
+  )
   assert response1.status_code == 202
   job1 = wait_for_job(response1.json()["job_id"])
   assert job1.get_status() == "finished"
@@ -264,7 +271,9 @@ def test_find_similar_molecules_caching(client):
   assert len(result1.results) > 0
 
   # 2. Second call, should hit cache
-  response2 = client.post("/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7})
+  response2 = client.post(
+    "/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7}
+  )
   assert response2.status_code == 202
   job2 = wait_for_job(response2.json()["job_id"])
   assert job2.get_status() == "finished"
@@ -274,7 +283,8 @@ def test_find_similar_molecules_caching(client):
 
   # 3. Third call, with force_recompute, should miss cache
   response3 = client.post(
-    "/api/v1/search/similar", json={"smiles": "CCO", "min_similarity": 0.7, "force_recompute": True}
+    "/api/v1/search/similar",
+    json={"smiles": "CCO", "min_similarity": 0.7, "force_recompute": True},
   )
   assert response3.status_code == 202
   job3 = wait_for_job(response3.json()["job_id"])
@@ -308,9 +318,6 @@ def test_ingest_molecules_file_not_found(mock_stat, client):
   job_id = response.json()["job_id"]
   job = wait_for_job(job_id)
   assert job.get_status() == "failed"
-from unittest.mock import mock_open, patch
-
-import pytest
 
 
 @pytest.mark.usefixtures("seed_molecules")
@@ -331,7 +338,10 @@ def test_search_molecules_sync(client):
 
 @pytest.mark.usefixtures("seed_molecules")
 def test_find_similar_molecules_sync(client):
-  response = client.post("/api/v1/search/similar?sync=true", json={"smiles": "CCO", "min_similarity": 0.1})
+  response = client.post(
+    "/api/v1/search/similar?sync=true",
+    json={"smiles": "CCO", "min_similarity": 0.1},
+  )
   assert response.status_code == 200
   data = response.json()
   assert len(data["results"]) > 0
@@ -349,5 +359,7 @@ def test_substructure_search_sync(client):
 @patch("builtins.open", new_callable=mock_open, read_data="CC\nCCC\nCCCC")
 def test_ingest_molecules_sync_success(mock_open_file, mock_stat, client):
   mock_stat.return_value.st_size = 15
-  response = client.post("/api/v1/ingest?sync=true", json={"file_path": "test_ingest.txt"})
+  response = client.post(
+    "/api/v1/ingest?sync=true", json={"file_path": "test_ingest.txt"}
+  )
   assert response.status_code == 200

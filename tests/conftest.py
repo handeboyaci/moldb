@@ -21,6 +21,8 @@ def db_engine():
 
   with engine.connect() as connection:
     connection.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+    connection.execute(text("CREATE EXTENSION IF NOT EXISTS rdkit;"))
+    connection.execute(text("SET rdkit.morgan_fp_size = 2048"))
     connection.commit()
 
   alembic_cfg = Config("alembic.ini")
@@ -31,7 +33,7 @@ def db_engine():
 
 
 @pytest.fixture(scope="function")
-def db_session(db_engine):
+def db_session(db_engine, monkeypatch):
   """
   Yields a SQLAlchemy session wrapped in a transaction.
   Rolls back the transaction after the test is completed.
@@ -40,6 +42,9 @@ def db_session(db_engine):
   transaction = connection.begin()
   Session = sessionmaker(bind=connection)
   session = Session()
+
+  # Monkeypatch the commit method to prevent commits during tests
+  monkeypatch.setattr(session, "commit", session.flush)
 
   yield session
 

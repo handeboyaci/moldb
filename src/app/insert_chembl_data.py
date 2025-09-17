@@ -86,7 +86,10 @@ def insert_data_via_api():
         failed_count += 1
         print(f"Error inserting molecule with SMILES {smiles}: {e}. Skipping.")
 
-  print(f"Finished data insertion. Total {inserted_count} molecules inserted, {failed_count} failed.")
+  print(
+    f"Finished data insertion. Total {inserted_count} molecules inserted, "
+    f"{failed_count} failed."
+  )
 
 
 if __name__ == "__main__":
