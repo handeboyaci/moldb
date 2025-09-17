@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 import pytest
 
-from src.app.models.molecule import Molecule, MoleculeInDB
+from src.app.models.molecule import Molecule
 from src.app.services.molecule_service import MoleculeService
 
 
@@ -145,9 +145,9 @@ def test_create_molecule_success(molecule_service, mock_molecule_repository):
   mock_molecule_repository.create_molecule.assert_called_once()
   call_args = mock_molecule_repository.create_molecule.call_args[0][0]
 
-  assert isinstance(call_args, MoleculeInDB)
-  assert call_args.smiles == smiles
-  assert call_args.inchikey == "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+  assert isinstance(call_args, dict)
+  assert call_args["smiles"] == smiles
+  assert call_args["inchikey"] == "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
   assert result == "some_molecule"
 
 

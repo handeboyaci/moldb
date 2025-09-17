@@ -4,8 +4,8 @@ services:
       context: .
       args:
         BUILD_ENV: dev
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
@@ -14,6 +14,9 @@ services:
     volumes:
       - .:/app
       - ./uploads:/uploads
+    networks:
+      - default
+      - nginx_npm_network
 
   db:
     image: mcs07/postgres-rdkit
@@ -44,4 +47,8 @@ services:
     volumes:
       - .:/app
       - ./uploads:/uploads
+
+networks:
+  nginx_npm_network:
+    external: true
 

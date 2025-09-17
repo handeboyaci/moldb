@@ -10,6 +10,7 @@ def test_create_molecule_success(client):
   assert data["status"] == "finished"
   job = Job.fetch(data["job_id"], connection=redis_conn)
   result = job.return_value()
+  assert result is not None
   assert result.smiles == "CCO"
   assert result.id is not None
 
@@ -20,8 +21,10 @@ def test_create_molecule_invalid_smiles(client):
   data = response.json()
   assert data["status"] == "failed"
   job = Job.fetch(data["job_id"], connection=redis_conn)
-  assert isinstance(job.latest_result().exc_string, str)
-  assert "Invalid SMILES string" in job.latest_result().exc_string
+  latest_result = job.latest_result()
+  assert latest_result is not None
+  assert isinstance(latest_result.exc_string, str)
+  assert "Invalid SMILES string" in latest_result.exc_string
 
 
 def test_create_molecule_duplicate_inchi(client):
@@ -32,6 +35,7 @@ def test_create_molecule_duplicate_inchi(client):
   assert data1["status"] == "finished"
   job1 = Job.fetch(data1["job_id"], connection=redis_conn)
   result1 = job1.return_value()
+  assert result1 is not None
   assert result1.smiles == "CCO"
 
   # Second creation should also succeed and return the existing molecule
@@ -41,6 +45,7 @@ def test_create_molecule_duplicate_inchi(client):
   assert data2["status"] == "finished"
   job2 = Job.fetch(data2["job_id"], connection=redis_conn)
   result2 = job2.return_value()
+  assert result2 is not None
 
   # Check that the returned molecule is the same one
   assert result2.id == result1.id

@@ -73,12 +73,14 @@ def _ingest_file_job(file_path: str):
       return _aggregate_results_job(None, chunk_jobs)
 
   except FileNotFoundError:
-    job.meta["status"] = "Error: File not found"
-    job.save_meta()
+    if job:
+      job.meta["status"] = "Error: File not found"
+      job.save_meta()
     raise
   except Exception as e:
-    job.meta["status"] = f"Error: {e}"
-    job.save_meta()
+    if job:
+      job.meta["status"] = f"Error: {e}"
+      job.save_meta()
     raise
 
 
@@ -105,7 +107,7 @@ def aggregate_results_job(parent_job_id: str):
   return _aggregate_results_job(parent_job_id)
 
 
-def _aggregate_results_job(parent_job_id: str, sync_results: list = None):
+def _aggregate_results_job(parent_job_id: str | None, sync_results: list | None = None):
   """Aggregates results from all chunk jobs."""
   job = rq.get_current_job()
   if job:
@@ -120,28 +122,31 @@ def _aggregate_results_job(parent_job_id: str, sync_results: list = None):
 
   total_ingested = 0
   total_failed = 0
+  total_skipped = 0
   all_errors = []
 
   for i, result in enumerate(results):
     total_ingested += result["successfully_ingested"]
     total_failed += result["failed_count"]
+    total_skipped += result["skipped_count"]
     all_errors.extend(result["errors"])
     if job:
       job.meta["progress"] = (i + 1) / len(results) * 100
       job.save_meta()
 
   final_result = {
-    "total_records_processed": total_ingested + total_failed,
+    "total_records_processed": total_ingested + total_failed + total_skipped,
     "successfully_ingested": total_ingested,
     "failed_count": total_failed,
+    "skipped_count": total_skipped,
     "errors": all_errors,
   }
 
   if parent_job_id:
     # Save final result to parent job
     parent_job = Job.fetch(parent_job_id, connection=redis_conn)
-    parent_job.result = final_result
-    parent_job.save()
+    parent_job.meta["result"] = final_result
+    parent_job.save_meta()
 
     # Clean up Redis hash
     redis_conn.delete(f"job:{parent_job_id}:results")

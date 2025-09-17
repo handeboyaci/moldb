@@ -4,6 +4,7 @@ import sys
 import time
 
 import requests
+from requests.exceptions import ConnectionError, RequestException
 
 # Add the parent directory to the Python path to allow imports from src.app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -25,7 +26,7 @@ def download_chembl_data():
         for chunk in response.iter_content(chunk_size=8192):
           f.write(chunk)
       print("Download complete.")
-    except requests.exceptions.RequestException as e:
+    except RequestException as e:
       print(f"Error downloading ChEMBL data: {e}")
       sys.exit(1)
   else:
@@ -41,7 +42,7 @@ def wait_for_api_health(url, timeout=60, interval=1):
       if response.status_code == 200 and response.json().get("status") == "ok":
         print("API is healthy.")
         return True
-    except requests.exceptions.ConnectionError:
+    except ConnectionError:
       pass
     print("API not yet healthy, retrying...")
     time.sleep(interval)
@@ -63,8 +64,8 @@ def insert_data_via_api():
   print(f"Inserting data from {GZ_FILE_PATH} into chemstructdb via API...")
 
   inserted_count = failed_count = 0
-  with gzip.open(GZ_FILE_PATH, "rt") as f:
-    header = f.readline().strip().split("\t")
+  with gzip.open(GZ_FILE_PATH, "rb") as f:
+    header: list[str] = f.readline().decode("utf-8").strip().split("\t")
     smiles_idx = header.index("canonical_smiles")
 
     for line in f:
@@ -82,7 +83,7 @@ def insert_data_via_api():
         if inserted_count % 100 == 0:  # Print every molecule for testing
           print(f"Inserted {inserted_count} molecules...")
 
-      except requests.exceptions.RequestException as e:
+      except RequestException as e:
         failed_count += 1
         print(f"Error inserting molecule with SMILES {smiles}: {e}. Skipping.")
 

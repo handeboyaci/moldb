@@ -1,6 +1,5 @@
 import json
-import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -27,7 +26,7 @@ def test_ingest_file_job_success(mock_rq_job):
   smiles_data = "CCO\nCCN\nCNC\n"
 
   with (
-    patch("builtins.open", unittest.mock.mock_open(read_data=smiles_data)),
+    patch("builtins.open", mock_open(read_data=smiles_data)),
     patch("src.worker.tasks.Path.stat") as mock_stat,
     patch("src.worker.tasks.process_chunk_job.delay") as mock_chunk_delay,
     patch("src.worker.tasks.aggregate_results_job.delay") as mock_aggregate_delay,
@@ -100,16 +99,23 @@ def test_aggregate_results_job(mock_redis_conn, mock_job_fetch, mock_get_current
   mock_get_current_job.return_value = mock_job
   parent_job_id = "parent_job"
   mock_parent_job = MagicMock()
+  mock_parent_job.meta = {}
   mock_job_fetch.return_value = mock_parent_job
 
   results_hash = {
     b"job1": json.dumps(
-      {"successfully_ingested": 10, "failed_count": 1, "errors": ["error1"]}
+      {
+        "successfully_ingested": 10,
+        "failed_count": 1,
+        "skipped_count": 0,
+        "errors": ["error1"],
+      }
     ),
     b"job2": json.dumps(
       {
         "successfully_ingested": 15,
         "failed_count": 2,
+        "skipped_count": 5,
         "errors": ["error2", "error3"],
       }
     ),
@@ -121,8 +127,8 @@ def test_aggregate_results_job(mock_redis_conn, mock_job_fetch, mock_get_current
 
   # Assert
   mock_redis_conn.hgetall.assert_called_once_with(f"job:{parent_job_id}:results")
-  assert mock_parent_job.result["successfully_ingested"] == 25
-  assert mock_parent_job.result["failed_count"] == 3
-  assert len(mock_parent_job.result["errors"]) == 3
-  mock_parent_job.save.assert_called_once()
+  assert mock_parent_job.meta["result"]["successfully_ingested"] == 25
+  assert mock_parent_job.meta["result"]["failed_count"] == 3
+  assert len(mock_parent_job.meta["result"]["errors"]) == 3
+  mock_parent_job.save_meta.assert_called_once()
   mock_redis_conn.delete.assert_called_once_with(f"job:{parent_job_id}:results")

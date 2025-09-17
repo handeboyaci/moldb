@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..models.molecule import (
   Molecule,
-  MoleculeInDB,
+  MoleculeDict,
   MoleculeOut,
   MoleculeWithSimilarity,
   SimilaritySearchResults,
@@ -22,19 +22,18 @@ class MoleculeRepository:
     self.redis_client = redis_client
     self.fpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
-  def create_molecule(self, molecule: MoleculeInDB):
-    db_molecule = Molecule(**molecule.model_dump())
+  def create_molecule(self, molecule: MoleculeDict):
+    db_molecule = Molecule(**molecule)
     self.db.add(db_molecule)
     self.db.commit()
     self.db.refresh(db_molecule)
     return MoleculeOut.model_validate(db_molecule)
 
-  def bulk_insert_molecules(self, molecules: list[MoleculeInDB]):
+  def bulk_insert_molecules(self, molecules: list[MoleculeDict]):
     if not molecules:
       return
 
-    molecule_mappings = [m.model_dump() for m in molecules]
-    self.db.bulk_insert_mappings(Molecule, molecule_mappings)
+    self.db.bulk_insert_mappings(Molecule, molecules)
     self.db.commit()
 
   def search(
@@ -128,7 +127,7 @@ class MoleculeRepository:
         results = [MoleculeWithSimilarity.model_validate(res) for res in results_json]
         return SimilaritySearchResults(cache_hit=True, results=results)
 
-    query_fp = DataStructs.BitVectToFPSText(self.fpgen.GetFingerprint(query_mol))
+    query_fp = DataStructs.BitVectToFPSText(self.fpgen.GetFingerprint(query_mol))  # ty: ignore[unresolved-attribute]
 
     sql = text(
       """

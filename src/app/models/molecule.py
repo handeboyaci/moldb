@@ -1,3 +1,4 @@
+from typing import TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -33,10 +34,11 @@ class MoleculeCreate(BaseModel):
   smiles: str
 
 
-class MoleculeInDB(MoleculeCreate):
+class MoleculeDict(TypedDict):
   id: UUID
   inchi: str
   inchikey: str
+  smiles: str
   mol: Chem.Mol
   molecular_weight: float
   chemical_formula: str
@@ -45,9 +47,7 @@ class MoleculeInDB(MoleculeCreate):
   h_bond_donors: int
   h_bond_acceptors: int
   rotatable_bonds: int
-  morgan_fingerprint: DataStructs.ExplicitBitVect
-
-  model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
+  morgan_fingerprint: DataStructs.ExplicitBitVect  # ty: ignore[unresolved-attribute]
 
 
 class MoleculeOut(BaseModel):

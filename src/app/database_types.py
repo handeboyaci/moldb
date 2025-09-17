@@ -33,7 +33,7 @@ class RDKitBfpType(UserDefinedType):
     def process(value):
       if value is None:
         return None
-      return DataStructs.BitVectToFPSText(value)
+      return DataStructs.BitVectToFPSText(value)  # ty: ignore[unresolved-attribute]
 
     return process
 
@@ -41,6 +41,6 @@ class RDKitBfpType(UserDefinedType):
     def process(value):
       if value is None:
         return None
-      return DataStructs.CreateFromFPSText(value)
+      return DataStructs.CreateFromFPSText(value)  # ty: ignore[unresolved-attribute]
 
     return process

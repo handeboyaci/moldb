@@ -8,18 +8,19 @@ from rdkit.Chem import (
   MolToInchi,
   MolToInchiKey,
   rdFingerprintGenerator,
+  rdMolDescriptors,
 )
 from sqlalchemy.orm import Session
 
-from ..models.molecule import MoleculeInDB
+from ..models.molecule import MoleculeDict
 from ..repositories.molecule_repository import MoleculeRepository
 from .cache_service import get_redis_client
 
 # FingerprintGenerator singleton.
-_fpgen = None
+_fpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
 
-def _process_smiles(smiles: str) -> MoleculeInDB | None:
+def _process_smiles(smiles: str) -> tuple[MoleculeDict, str] | None:
   """
   Helper function to process a single SMILES string.
   This function is designed to be run in a separate process.
@@ -33,22 +34,24 @@ def _process_smiles(smiles: str) -> MoleculeInDB | None:
       raise ValueError("Invalid SMILES string")
 
     morgan_fingerprint = _fpgen.GetFingerprint(mol)
+    inchikey = MolToInchiKey(mol)
 
-    return MoleculeInDB(
-      id=uuid4(),
-      inchi=MolToInchi(mol),
-      inchikey=MolToInchiKey(mol),
-      smiles=smiles,
-      mol=mol,
-      molecular_weight=Descriptors.MolWt(mol),
-      chemical_formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
-      logp=Descriptors.MolLogP(mol),
-      tpsa=Descriptors.TPSA(mol),
-      h_bond_donors=Descriptors.NumHDonors(mol),
-      h_bond_acceptors=Descriptors.NumHAcceptors(mol),
-      rotatable_bonds=Descriptors.NumRotatableBonds(mol),
-      morgan_fingerprint=morgan_fingerprint,
-    )
+    molecule_data: MoleculeDict = {
+      "id": uuid4(),
+      "inchi": MolToInchi(mol),
+      "inchikey": inchikey,
+      "smiles": smiles,
+      "mol": mol,
+      "molecular_weight": Descriptors.MolWt(mol),
+      "chemical_formula": rdMolDescriptors.CalcMolFormula(mol),
+      "logp": Descriptors.MolLogP(mol),  # ty: ignore[unresolved-attribute]
+      "tpsa": Descriptors.TPSA(mol),  # ty: ignore[unresolved-attribute]
+      "h_bond_donors": Descriptors.NumHDonors(mol),  # ty: ignore[unresolved-attribute]
+      "h_bond_acceptors": Descriptors.NumHAcceptors(mol),  # ty: ignore[unresolved-attribute]
+      "rotatable_bonds": Descriptors.NumRotatableBonds(mol),  # ty: ignore[unresolved-attribute]
+      "morgan_fingerprint": morgan_fingerprint,
+    }
+    return molecule_data, inchikey
   except Exception:
     return None
 
@@ -73,21 +76,21 @@ class MoleculeService:
       return existing_molecule
 
     # If it doesn't exist, create it.
-    molecule_data = MoleculeInDB(
-      id=uuid4(),
-      inchi=MolToInchi(mol),
-      inchikey=inchikey,
-      smiles=smiles,
-      mol=mol,
-      molecular_weight=Descriptors.MolWt(mol),
-      chemical_formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
-      logp=Descriptors.MolLogP(mol),
-      tpsa=Descriptors.TPSA(mol),
-      h_bond_donors=Descriptors.NumHDonors(mol),
-      h_bond_acceptors=Descriptors.NumHAcceptors(mol),
-      rotatable_bonds=Descriptors.NumRotatableBonds(mol),
-      morgan_fingerprint=_fpgen.GetFingerprint(mol),
-    )
+    molecule_data: MoleculeDict = {
+      "id": uuid4(),
+      "inchi": MolToInchi(mol),
+      "inchikey": inchikey,
+      "smiles": smiles,
+      "mol": mol,
+      "molecular_weight": Descriptors.MolWt(mol),
+      "chemical_formula": Chem.rdMolDescriptors.CalcMolFormula(mol),  # ty: ignore[unresolved-attribute]
+      "logp": Descriptors.MolLogP(mol),  # ty: ignore[unresolved-attribute]
+      "tpsa": Descriptors.TPSA(mol),  # ty: ignore[unresolved-attribute]
+      "h_bond_donors": Descriptors.NumHDonors(mol),  # ty: ignore[unresolved-attribute]
+      "h_bond_acceptors": Descriptors.NumHAcceptors(mol),  # ty: ignore[unresolved-attribute]
+      "rotatable_bonds": Descriptors.NumRotatableBonds(mol),  # ty: ignore[unresolved-attribute]
+      "morgan_fingerprint": _fpgen.GetFingerprint(mol),
+    }
 
     return self.repository.create_molecule(molecule_data)
 
@@ -147,13 +150,19 @@ class MoleculeService:
   def create_molecules_from_smiles(self, smiles_list: list[str], starting_line: int):
     molecules_to_create = []
     errors = []
+    skipped_count = 0
 
     with ProcessPoolExecutor() as executor:
       results = executor.map(_process_smiles, smiles_list)
 
     for i, result in enumerate(results):
       if result:
-        molecules_to_create.append(result)
+        molecule_data, inchikey = result
+        existing_molecule = self.repository.find_by_inchikey(inchikey)
+        if existing_molecule:
+          skipped_count += 1
+        else:
+          molecules_to_create.append(molecule_data)
       else:
         errors.append(
           {
@@ -169,5 +178,6 @@ class MoleculeService:
     return {
       "successfully_ingested": len(molecules_to_create),
       "failed_count": len(errors),
+      "skipped_count": skipped_count,
       "errors": errors,
     }
