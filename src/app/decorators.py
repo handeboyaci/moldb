@@ -10,7 +10,17 @@ from .dependencies import task_queue
 def asynchronous_task(func):
   @wraps(func)
   def wrapper(*args, **kwargs):
+    sync = kwargs.get("sync", False)
     task_to_enqueue, *task_args = func(*args, **kwargs)
+
+    if sync:
+      db_session = kwargs.get("db")
+
+      def override_get_db():
+        yield db_session
+
+      with patch("src.app.dependencies.get_db", new=override_get_db):
+        return task_to_enqueue(*task_args)
 
     if not task_queue.is_async:
       db_session = kwargs.get("db")

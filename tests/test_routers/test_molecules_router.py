@@ -308,3 +308,46 @@ def test_ingest_molecules_file_not_found(mock_stat, client):
   job_id = response.json()["job_id"]
   job = wait_for_job(job_id)
   assert job.get_status() == "failed"
+from unittest.mock import mock_open, patch
+
+import pytest
+
+
+@pytest.mark.usefixtures("seed_molecules")
+def test_create_molecule_sync(client):
+  response = client.post("/api/v1/molecule?sync=true", json={"smiles": "CCO"})
+  assert response.status_code == 200
+  data = response.json()
+  assert data["smiles"] == "CCO"
+
+
+@pytest.mark.usefixtures("seed_molecules")
+def test_search_molecules_sync(client):
+  response = client.get("/api/v1/search?sync=true&min_mol_weight=50")
+  assert response.status_code == 200
+  data = response.json()
+  assert len(data) == 3
+
+
+@pytest.mark.usefixtures("seed_molecules")
+def test_find_similar_molecules_sync(client):
+  response = client.post("/api/v1/search/similar?sync=true", json={"smiles": "CCO", "min_similarity": 0.1})
+  assert response.status_code == 200
+  data = response.json()
+  assert len(data["results"]) > 0
+
+
+@pytest.mark.usefixtures("seed_molecules")
+def test_substructure_search_sync(client):
+  response = client.post("/api/v1/search/substructure?sync=true", json={"smiles": "CC"})
+  assert response.status_code == 200
+  data = response.json()
+  assert len(data) == 4
+
+
+@patch("src.worker.tasks.Path.stat")
+@patch("builtins.open", new_callable=mock_open, read_data="CC\nCCC\nCCCC")
+def test_ingest_molecules_sync_success(mock_open_file, mock_stat, client):
+  mock_stat.return_value.st_size = 15
+  response = client.post("/api/v1/ingest?sync=true", json={"file_path": "test_ingest.txt"})
+  assert response.status_code == 200
