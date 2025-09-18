@@ -2,14 +2,12 @@ from concurrent.futures import ProcessPoolExecutor
 from uuid import uuid4
 
 from rdkit import Chem
-from rdkit.Chem import (
-  Descriptors,
-  MolFromSmiles,
-  MolToInchi,
-  MolToInchiKey,
-  rdFingerprintGenerator,
-  rdMolDescriptors,
-)
+from rdkit.Chem import Descriptors
+from rdkit.Chem import MolFromSmiles
+from rdkit.Chem import MolToInchi
+from rdkit.Chem import MolToInchiKey
+from rdkit.Chem import rdFingerprintGenerator
+from rdkit.Chem import rdMolDescriptors
 from sqlalchemy.orm import Session
 
 from ..models.molecule import MoleculeDict
@@ -146,6 +144,9 @@ class MoleculeService:
 
   def substructure_search(self, smiles: str, skip: int = 0, limit: int = 100):
     return self.repository.substructure_search(smiles, skip=skip, limit=limit)
+
+  def get_molecule_count(self) -> int:
+    return self.repository.count()
 
   def create_molecules_from_smiles(self, smiles_list: list[str], starting_line: int):
     molecules_to_create = []

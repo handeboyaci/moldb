@@ -1,3 +1,4 @@
-pytest
+fakeredis
 httpx
+pytest
 pytest-env

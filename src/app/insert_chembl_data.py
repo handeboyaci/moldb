@@ -4,14 +4,15 @@ import sys
 import time
 
 import requests
-from requests.exceptions import ConnectionError, RequestException
+from requests.exceptions import ConnectionError
+from requests.exceptions import RequestException
 
 # Add the parent directory to the Python path to allow imports from src.app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 CHEMBL_DATA_URL = "http://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/releases/chembl_23/chembl_23_chemreps.txt.gz"
-GZ_FILE_PATH = "/app/data/chembl_23_chemreps.txt.gz"
-API_URL = "http://app:8000/api/v1/molecule"
+GZ_FILE_PATH = "/app/uploads/chembl_23_chemreps.txt.gz"
+API_URL = "http://app:8000/api/v1/ingest"
 HEALTH_CHECK_URL = "http://app:8000/health"
 
 
@@ -51,6 +52,8 @@ def wait_for_api_health(url, timeout=60, interval=1):
 
 
 def insert_data_via_api():
+  SMILES_FILE_PATH = "/app/uploads/chembl_23_smiles.txt"
+
   if not wait_for_api_health(HEALTH_CHECK_URL):
     print("Cannot insert data: API is not healthy.")
     sys.exit(1)
@@ -61,36 +64,32 @@ def insert_data_via_api():
     print("ChEMBL data file not available. Skipping data insertion.")
     return
 
-  print(f"Inserting data from {GZ_FILE_PATH} into chemstructdb via API...")
+  print(f"Processing {GZ_FILE_PATH} to extract SMILES...")
+  try:
+    with (
+      gzip.open(GZ_FILE_PATH, "rt", encoding="utf-8") as gz_f,
+      open(SMILES_FILE_PATH, "w", encoding="utf-8") as smiles_f,
+    ):
+      # Skip header
+      gz_f.readline()
+      for line in gz_f:
+        parts = line.strip().split("\t")
+        if len(parts) > 1:
+          smiles_f.write(parts[1] + "\n")
+    print(f"SMILES extracted to {SMILES_FILE_PATH}.")
+  except Exception as e:
+    print(f"Error processing gzipped file: {e}")
+    sys.exit(1)
 
-  inserted_count = failed_count = 0
-  with gzip.open(GZ_FILE_PATH, "rb") as f:
-    header: list[str] = f.readline().decode("utf-8").strip().split("\t")
-    smiles_idx = header.index("canonical_smiles")
+  print(f"Initiating ingestion for {SMILES_FILE_PATH} via API...")
 
-    for line in f:
-      parts = line.strip().split("\t")
-      if len(parts) != len(header):
-        print(f"Skipping malformed line: {line.strip()}")
-        continue
-
-      smiles = parts[smiles_idx]
-
-      try:
-        response = requests.post(API_URL, json={"smiles": smiles})
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        inserted_count += 1
-        if inserted_count % 100 == 0:  # Print every molecule for testing
-          print(f"Inserted {inserted_count} molecules...")
-
-      except RequestException as e:
-        failed_count += 1
-        print(f"Error inserting molecule with SMILES {smiles}: {e}. Skipping.")
-
-  print(
-    f"Finished data insertion. Total {inserted_count} molecules inserted, "
-    f"{failed_count} failed."
-  )
+  try:
+    response = requests.post(API_URL, json={"file_path": SMILES_FILE_PATH[13:]})
+    response.raise_for_status()  # Raise an exception for HTTP errors
+    print(f"Successfully initiated ingestion for {SMILES_FILE_PATH}.")
+  except RequestException as e:
+    print(f"Error initiating ingestion for {SMILES_FILE_PATH}: {e}")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

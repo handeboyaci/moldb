@@ -1,13 +1,13 @@
 import json
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock
+from unittest.mock import mock_open
+from unittest.mock import patch
 
 import pytest
 
-from src.worker.tasks import (
-  _aggregate_results_job,
-  _ingest_file_job,
-  _process_chunk_job,
-)
+from src.worker.tasks import _aggregate_results_job
+from src.worker.tasks import _ingest_file_job
+from src.worker.tasks import _process_chunk_job
 
 
 @pytest.fixture
@@ -75,12 +75,11 @@ def test_process_chunk_job(MockMoleculeService, mock_get_db, mock_redis_conn):
 
   with patch("rq.get_current_job") as mock_get_job:
     mock_job = MagicMock()
-    mock_job.meta = {"parent_job_id": "parent_id"}
     mock_get_job.return_value = mock_job
 
     # Execute
     # Call the original function, bypassing the @job decorator
-    _process_chunk_job(smiles_list, starting_line)
+    _process_chunk_job(smiles_list, starting_line, parent_job_id="parent_id")
 
     # Assert
     mock_service_instance.create_molecules_from_smiles.assert_called_once_with(

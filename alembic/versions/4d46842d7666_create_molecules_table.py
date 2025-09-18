@@ -6,12 +6,14 @@ Create Date: 2025-10-08 02:37:02.229830
 
 """
 
-from typing import Sequence, Union
+from typing import Sequence
+from typing import Union
 
 import sqlalchemy as sa
 
 from alembic import op
-from src.app.database_types import RDKitBfpType, RDKitMolType
+from src.app.database_types import RDKitBfpType
+from src.app.database_types import RDKitMolType
 
 # revision identifiers, used by Alembic.
 revision: str = "4d46842d7666"

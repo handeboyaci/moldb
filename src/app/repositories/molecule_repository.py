@@ -2,18 +2,18 @@ import json
 from uuid import UUID
 
 import redis
-from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem, rdFingerprintGenerator
+from rdkit import Chem
+from rdkit import DataStructs
+from rdkit.Chem import AllChem
+from rdkit.Chem import rdFingerprintGenerator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..models.molecule import (
-  Molecule,
-  MoleculeDict,
-  MoleculeOut,
-  MoleculeWithSimilarity,
-  SimilaritySearchResults,
-)
+from ..models.molecule import Molecule
+from ..models.molecule import MoleculeDict
+from ..models.molecule import MoleculeOut
+from ..models.molecule import MoleculeWithSimilarity
+from ..models.molecule import SimilaritySearchResults
 
 
 class MoleculeRepository:
@@ -192,3 +192,6 @@ class MoleculeRepository:
     )
     result = self.db.execute(sql, {"smiles": smiles, "skip": skip, "limit": limit})
     return [MoleculeOut.model_validate(row, from_attributes=True) for row in result]
+
+  def count(self) -> int:
+    return self.db.query(Molecule).count()

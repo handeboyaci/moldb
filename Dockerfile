@@ -17,14 +17,12 @@ RUN pip install -r requirements.txt
 
 # Install development and testing dependencies based on build argument
 ARG BUILD_ENV
-RUN if [ "$BUILD_ENV" = "dev" ]; then pip install -r requirements-dev.txt; fi
-RUN if [ "$BUILD_ENV" = "test" ]; then pip install -r requirements-test.txt; fi
+RUN if [ "$BUILD_ENV" = "dev" ]; then pip install -r requirements-dev.txt; pip install -r requirements-test.txt; fi
 
 # Copy the rest of the application's code into the container at /app
 COPY . .
 
 ENV PYTHONPATH=/app
-ENV SQLALCHEMY_DATABASE_URL="postgresql://user:password@db:5432/chemstructdb"
 
 # Copy entrypoint script and make it executable
 COPY entrypoint.sh /app/entrypoint.sh

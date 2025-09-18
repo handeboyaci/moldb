@@ -1,13 +1,19 @@
 from typing import TypedDict
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
-from rdkit import Chem, DataStructs
-from sqlalchemy import REAL, Column, Integer, String
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from rdkit import Chem
+from rdkit import DataStructs
+from sqlalchemy import REAL
+from sqlalchemy import Column
+from sqlalchemy import Integer
+from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import declarative_base
 
-from ..database_types import RDKitBfpType, RDKitMolType
+from ..database_types import RDKitBfpType
+from ..database_types import RDKitMolType
 
 Base = declarative_base()
 

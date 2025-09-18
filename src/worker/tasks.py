@@ -52,7 +52,7 @@ def _ingest_file_job(file_path: str):
 
         if job:
           chunk_job = process_chunk_job.delay(
-            chunk, chunk_num * chunk_size, meta={"parent_job_id": job.id}
+            chunk, chunk_num * chunk_size, job.id, db_url=settings.DATABASE_URL
           )
         else:
           chunk_job = _process_chunk_job(chunk, chunk_num * chunk_size)
@@ -85,20 +85,31 @@ def _ingest_file_job(file_path: str):
 
 
 @job("default", connection=redis_conn)
-def process_chunk_job(smiles_list: list[str], starting_line: int, **kwargs):
-  return _process_chunk_job(smiles_list, starting_line)
+def process_chunk_job(
+  smiles_list: list[str],
+  starting_line: int,
+  parent_job_id: str | None = None,
+  db_url: str | None = None,
+):
+  return _process_chunk_job(smiles_list, starting_line, parent_job_id, db_url)
 
 
-def _process_chunk_job(smiles_list: list[str], starting_line: int):
+def _process_chunk_job(
+  smiles_list: list[str],
+  starting_line: int,
+  parent_job_id: str | None = None,
+  db_url: str | None = None,
+):
   """Worker job to process a chunk of SMILES strings."""
-  db = next(dependencies.get_db())
+  if db_url:
+    db = next(dependencies.get_db(db_url))
+  else:
+    db = next(dependencies.get_db())
   service = MoleculeService(db)
   results = service.create_molecules_from_smiles(smiles_list, starting_line)
   job = rq.get_current_job()
-  if job:
-    redis_conn.hset(
-      f"job:{job.meta['parent_job_id']}:results", job.id, json.dumps(results)
-    )
+  if job and parent_job_id:
+    redis_conn.hset(f"job:{parent_job_id}:results", job.id, json.dumps(results))
   return results
 
 

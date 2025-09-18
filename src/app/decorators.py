@@ -1,9 +1,9 @@
 from functools import wraps
-from unittest.mock import patch
 
 from fastapi import status
 from fastapi.responses import JSONResponse
 
+from .dependencies import db_session_context
 from .dependencies import task_queue
 
 
@@ -15,23 +15,13 @@ def asynchronous_task(func):
 
     if sync:
       db_session = kwargs.get("db")
-
-      def override_get_db():
-        yield db_session
-
-      with patch("src.app.dependencies.get_db", new=override_get_db):
+      token = db_session_context.set(db_session)
+      try:
         return task_to_enqueue(*task_args)
+      finally:
+        db_session_context.reset(token)
 
-    if not task_queue.is_async:
-      db_session = kwargs.get("db")
-
-      def override_get_db():
-        yield db_session
-
-      with patch("src.app.dependencies.get_db", new=override_get_db):
-        job = task_queue.enqueue(task_to_enqueue, *task_args)
-    else:
-      job = task_queue.enqueue(task_to_enqueue, *task_args)
+    job = task_queue.enqueue(task_to_enqueue, *task_args)
 
     return JSONResponse(
       status_code=status.HTTP_202_ACCEPTED,

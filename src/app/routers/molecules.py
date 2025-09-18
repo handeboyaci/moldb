@@ -1,22 +1,19 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
+from fastapi import Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.app.decorators import asynchronous_task
-from src.worker.tasks import (
-  create_molecule_task,
-  find_similar_molecules_task,
-  ingest_file_job,
-  search_molecules_task,
-  substructure_search_task,
-)
+from src.worker.tasks import create_molecule_task
+from src.worker.tasks import find_similar_molecules_task
+from src.worker.tasks import ingest_file_job
+from src.worker.tasks import search_molecules_task
+from src.worker.tasks import substructure_search_task
 
 from .. import dependencies
-from ..models.molecule import (
-  MoleculeCreate,
-  MoleculeOut,
-  SimilaritySearchResults,
-)
+from ..models.molecule import MoleculeCreate
+from ..models.molecule import MoleculeOut
+from ..models.molecule import SimilaritySearchResults
 
 router = APIRouter()
 

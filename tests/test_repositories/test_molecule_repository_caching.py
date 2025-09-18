@@ -4,9 +4,11 @@ from unittest.mock import Mock
 
 import pytest
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdFingerprintGenerator
+from rdkit.Chem import AllChem
+from rdkit.Chem import rdFingerprintGenerator
 
-from src.app.models.molecule import Molecule, MoleculeWithSimilarity
+from src.app.models.molecule import Molecule
+from src.app.models.molecule import MoleculeWithSimilarity
 from src.app.repositories.molecule_repository import MoleculeRepository
 
 
